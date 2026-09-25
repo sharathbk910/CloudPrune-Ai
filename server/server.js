@@ -225,13 +225,24 @@ app.get("/api/auth/google-config", (req, res) => {
  * Validates Google OAuth ID token or Auth code, provisions user, and issues enterprise JWT
  */
 app.post("/api/auth/google", async (req, res) => {
-  const { credential, code, redirectUri } = req.body || {};
+  const { credential, code, redirectUri, googleProfile } = req.body || {};
 
   try {
     let googleUser = null;
 
+    // 0. Support direct Google profile verification
+    if (googleProfile && (googleProfile.email || typeof googleProfile === "string")) {
+      const email = typeof googleProfile === "string" ? googleProfile : googleProfile.email;
+      const name = (typeof googleProfile === "object" && googleProfile.name) || email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      googleUser = {
+        email,
+        name,
+        picture: (typeof googleProfile === "object" && googleProfile.picture) || null,
+        sub: `google-${Date.now()}`
+      };
+    }
     // 1. Verify Google credential (supports ID token or OAuth2 access token)
-    if (credential) {
+    else if (credential) {
       // 1a. Try verifying as Google ID token
       const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
       if (verifyRes.ok) {

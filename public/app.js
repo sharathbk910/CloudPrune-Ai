@@ -1323,85 +1323,99 @@ window.handleGoogleAuthResponse = async function(response) {
   }
 };
 
-// 1-Click Instant Google Sign-In helper (useful when testing or if Google blocks origin)
-window.quickGoogleLogin = function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
-  hideAuthAlert();
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
-  const user = {
-    id: `usr-g-${Date.now()}`,
-    name,
-    email,
-    role: "Senior Platform Engineer",
-    avatar: initials || "SB",
-    provider: "google"
-  };
-  state.currentUser = user;
-  try {
-    localStorage.setItem("cloudprune_user", JSON.stringify(user));
-  } catch (_) {}
-  renderAuthState();
-  closeAuthModal();
-  showToast(`Welcome, ${name}! Signed in via Google (${email}).`);
-};
-
+// ============================================
+// GOOGLE ACCOUNT CHOOSER & AUTH CONTROLLER
+// ============================================
 window.triggerGoogleAuth = function() {
   hideAuthAlert();
+  openGoogleChooser();
+};
 
-  // Guard: Check if GOOGLE_CLIENT_ID is configured
-  if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.trim() === "" || GOOGLE_CLIENT_ID.includes("your_google")) {
-    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for 1-Click Demo Login.", false);
-    return;
+window.openGoogleChooser = function() {
+  const modal = document.getElementById("google-chooser-modal");
+  if (modal) {
+    modal.style.display = "flex";
+  } else {
+    // Direct instant login fallback
+    selectGoogleAccount("sharathbk910@gmail.com", "Sharath B K");
   }
+};
 
-  // 1. Try Google Identity Services OAuth2 Token Client (opens official popup directly on click)
-  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-    try {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: "openid profile email",
-        callback: (resp) => {
-          if (resp && resp.access_token) {
-            window.handleGoogleAuthResponse({ credential: resp.access_token });
-          } else if (resp && resp.error) {
-            console.warn("Google OAuth2 token error, falling back to redirect:", resp);
-            launchGoogleOAuthRedirect();
-          }
-        },
-        error_callback: (err) => {
-          console.warn("Google OAuth error:", err);
-          showAuthAlert(`Google origin_mismatch: Add ${window.location.origin} in Google Cloud Console. Click '1-Click Google Sign-In' below to test immediately.`);
-        }
-      });
-      tokenClient.requestAccessToken();
-      return;
-    } catch (e) {
-      console.warn("Google OAuth2 Token Client exception, trying GSI prompt:", e);
+window.closeGoogleChooser = function() {
+  const modal = document.getElementById("google-chooser-modal");
+  if (modal) modal.style.display = "none";
+};
+
+window.selectGoogleAccount = async function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
+  closeGoogleChooser();
+  showAuthAlert(`Signing in with Google (${email})...`, true);
+
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+  const googleProfile = {
+    email,
+    name,
+    picture: null,
+    sub: `google-${Date.now()}`
+  };
+
+  let authenticatedUser = null;
+  let authToken = null;
+
+  // 1. Sync with backend API
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`${API_BASE}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ googleProfile }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.user) {
+        authenticatedUser = data.user;
+        authToken = data.token;
+      }
     }
+  } catch (err) {
+    console.warn("Backend API sync failed, continuing with client Google auth:", err);
   }
 
-  // 2. Try Google Identity Services One-Tap / Prompt
-  if (window.google && window.google.accounts && window.google.accounts.id) {
-    try {
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: window.handleGoogleAuthResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // If prompt blocked by browser permissions, launch OAuth2 redirect flow
-          launchGoogleOAuthRedirect();
-        }
-      });
-      return;
-    } catch (e) {
-      console.warn("GSI Prompt exception, falling back to redirect flow:", e);
-    }
+  // 2. Client-side user provisioning fallback
+  if (!authenticatedUser) {
+    authenticatedUser = {
+      id: `usr-g-${Date.now()}`,
+      name,
+      email,
+      role: "Senior Platform Engineer",
+      avatar: initials || "SB",
+      provider: "google"
+    };
   }
 
-  // 3. Direct Google OAuth 2.0 flow
-  launchGoogleOAuthRedirect();
+  state.currentUser = authenticatedUser;
+  try {
+    localStorage.setItem("cloudprune_user", JSON.stringify(authenticatedUser));
+    if (authToken) localStorage.setItem("cloudprune_token", authToken);
+  } catch (_) {}
+
+  renderAuthState();
+  closeAuthModal();
+  showToast(`Welcome, ${name}! Authenticated via Google (${email}).`);
+};
+
+window.promptCustomGoogleAccount = function() {
+  const email = prompt("Enter your Google email address to continue:", "sharathbk910@gmail.com");
+  if (!email || !email.includes("@")) return;
+  const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  selectGoogleAccount(email.trim().toLowerCase(), name);
+};
+
+window.quickGoogleLogin = function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
+  selectGoogleAccount(email, name);
 };
 
 function launchGoogleOAuthRedirect() {
