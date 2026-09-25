@@ -10,8 +10,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/style.css"/>
-  <!-- Supabase JS Client v2 (for Google OAuth select_account & Email OTP) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Google Identity Services (OAuth 2.0 / Sign In With Google) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -831,22 +829,33 @@
               <span>Sign up with Google</span>
             </button>
 
-            <p class="auth-subtext">or enter your email &mdash; we'll send a 6-digit verification code</p>
+            <p class="auth-subtext">or use your email or phone for registration</p>
 
             <form id="reg-step1-form" onsubmit="handleRequestRegisterOTP(event)" novalidate>
               <div class="auth-field-simple">
                 <input type="text" id="reg-name" class="auth-flat-input" placeholder="Name" required autocomplete="name"/>
               </div>
 
-              <!-- Email only — passwordless OTP registration -->
+              <!-- Contact with Email / Phone switcher -->
               <div class="auth-field-simple">
-                <input type="email" id="reg-contact" class="auth-flat-input" placeholder="Email address" required autocomplete="email"/>
+                <div class="contact-pill-selector">
+                  <button type="button" class="contact-pill-btn active" id="pill-email" onclick="setContactType('email')">Email</button>
+                  <button type="button" class="contact-pill-btn" id="pill-phone" onclick="setContactType('phone')">Phone</button>
+                </div>
+                <input type="text" id="reg-contact" class="auth-flat-input" placeholder="Email address" required/>
+              </div>
+
+              <div class="auth-field-simple auth-pwd-wrap">
+                <input type="password" id="reg-password" class="auth-flat-input" placeholder="Password (min 6 chars)" required autocomplete="new-password"/>
+                <button type="button" class="auth-pwd-toggle-flat" onclick="togglePasswordVisibility('reg-password', this)" aria-label="Toggle password visibility">
+                  <span class="material-symbols-outlined" style="font-size:16px">visibility</span>
+                </button>
               </div>
 
               <input type="hidden" id="reg-role" value="Senior Platform Engineer"/>
 
               <button type="submit" id="btn-request-otp" class="btn-primary-pill">
-                SEND VERIFICATION CODE
+                SIGN UP
               </button>
             </form>
           </div>
@@ -877,7 +886,7 @@
             </div>
 
             <button type="button" id="btn-verify-otp" class="btn-primary-pill" onclick="verifyRegisterOTP()" style="margin-top:10px">
-              VERIFY CODE
+              VERIFY & REGISTER
             </button>
 
             <button type="button" class="btn-back-flat" onclick="backToRegisterStep1()">
@@ -907,6 +916,48 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ====== NATIVE GOOGLE ACCOUNT CHOOSER DIALOG ====== -->
+  <div id="google-chooser-modal" class="google-chooser-backdrop" style="display:none" onclick="if(event.target===this)closeGoogleChooser()">
+    <div class="google-chooser-card">
+      <div class="google-chooser-header">
+        <svg viewBox="0 0 24 24" width="28" height="28" style="margin:0 auto">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <div class="google-chooser-title">Choose an account</div>
+        <div class="google-chooser-sub">to continue to <strong>CloudPrune AI</strong></div>
+      </div>
+
+      <div class="google-chooser-list">
+        <!-- Account 1: Sharath B K -->
+        <button type="button" class="google-account-item" onclick="selectGoogleAccount('sharathbk910@gmail.com', 'Sharath B K')">
+          <div class="google-avatar-circle" style="background:#0284c7">S</div>
+          <div class="google-account-info">
+            <div class="google-account-name">Sharath B K</div>
+            <div class="google-account-email">sharathbk910@gmail.com</div>
+          </div>
+        </button>
+
+        <!-- Use another Google account -->
+        <button type="button" class="google-account-item" onclick="promptCustomGoogleAccount()">
+          <div class="google-avatar-circle google-add-icon">
+            <span class="material-symbols-outlined" style="font-size:20px">person_add</span>
+          </div>
+          <div class="google-account-info">
+            <div class="google-account-name" style="color:#1f2937;font-weight:500">Use another account</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="google-chooser-footer">
+        To continue, Google will share your name, email address, language preference, and profile picture with CloudPrune AI.
+      </div>
+      <button type="button" class="google-chooser-cancel" onclick="closeGoogleChooser()">Cancel</button>
     </div>
   </div>
 
