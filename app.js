@@ -1324,108 +1324,76 @@ window.handleGoogleAuthResponse = async function(response) {
 };
 
 // ============================================
-// GOOGLE ACCOUNT CHOOSER & AUTH CONTROLLER
+// SUPABASE & GOOGLE OAUTH CONTROLLER
 // ============================================
-window.triggerGoogleAuth = function() {
+window.triggerGoogleAuth = async function() {
   hideAuthAlert();
-  openGoogleChooser();
-};
 
-window.openGoogleChooser = function() {
-  const modal = document.getElementById("google-chooser-modal");
-  if (modal) {
-    modal.style.display = "flex";
-  } else {
-    // Direct instant login fallback
-    selectGoogleAccount("sharathbk910@gmail.com", "Sharath B K");
-  }
-};
-
-window.closeGoogleChooser = function() {
-  const modal = document.getElementById("google-chooser-modal");
-  if (modal) modal.style.display = "none";
-};
-
-window.selectGoogleAccount = async function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
-  closeGoogleChooser();
-  showAuthAlert(`Signing in with Google (${email})...`, true);
-
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
-  const googleProfile = {
-    email,
-    name,
-    picture: null,
-    sub: `google-${Date.now()}`
-  };
-
-  let authenticatedUser = null;
-  let authToken = null;
-
-  // 1. Sync with backend API
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`${API_BASE}/api/auth/google`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ googleProfile }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.user) {
-        authenticatedUser = data.user;
-        authToken = data.token;
-      }
+  // 1. Supabase OAuth with Forced Account Selection (prompt: 'select_account')
+  if (typeof window !== "undefined" && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      showAuthAlert("Redirecting to Google for account selection...", true);
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // Strictly force Google account picker so users must choose an account
+          queryParams: { prompt: 'select_account' },
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      return;
+    } catch (err) {
+      console.warn("Supabase Google OAuth initiation error:", err);
+      showAuthAlert(err.message || "Failed to initiate Google OAuth.");
+      return;
     }
-  } catch (err) {
-    console.warn("Backend API sync failed, continuing with client Google auth:", err);
   }
 
-  // 2. Client-side user provisioning fallback
-  if (!authenticatedUser) {
-    authenticatedUser = {
-      id: `usr-g-${Date.now()}`,
-      name,
-      email,
-      role: "Senior Platform Engineer",
-      avatar: initials || "SB",
-      provider: "google"
-    };
+  // 2. Direct Google OAuth fallback with prompt=select_account
+  if (typeof GOOGLE_CLIENT_ID !== "undefined" && GOOGLE_CLIENT_ID) {
+    launchGoogleOAuthRedirect();
+    return;
   }
+
+  showAuthAlert("Google OAuth credentials are not configured.", false);
+};
+
+function handleSupabaseAuthUser(sbUser) {
+  if (!sbUser) return;
+  const name = sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email?.split('@')[0] || "Platform Engineer";
+  const email = sbUser.email || "";
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase() || "PE";
+
+  const authenticatedUser = {
+    id: sbUser.id,
+    name,
+    email,
+    role: sbUser.user_metadata?.role || "Senior Platform Engineer",
+    avatar: initials,
+    picture: sbUser.user_metadata?.avatar_url || null,
+    provider: sbUser.app_metadata?.provider || "google"
+  };
 
   state.currentUser = authenticatedUser;
   try {
     localStorage.setItem("cloudprune_user", JSON.stringify(authenticatedUser));
-    if (authToken) localStorage.setItem("cloudprune_token", authToken);
   } catch (_) {}
 
   renderAuthState();
   closeAuthModal();
-  showToast(`Welcome, ${name}! Authenticated via Google (${email}).`);
-};
-
-window.promptCustomGoogleAccount = function() {
-  const email = prompt("Enter your Google email address to continue:", "sharathbk910@gmail.com");
-  if (!email || !email.includes("@")) return;
-  const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  selectGoogleAccount(email.trim().toLowerCase(), name);
-};
-
-window.quickGoogleLogin = function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
-  selectGoogleAccount(email, name);
-};
+  showToast(`Welcome, ${name}! Authenticated via ${authenticatedUser.provider}.`);
+}
 
 function launchGoogleOAuthRedirect() {
   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.trim() === "") {
-    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for instant login.", false);
+    showAuthAlert("Google OAuth is not configured with client credentials.", false);
     return;
   }
   const redirectUri = window.location.origin + (window.location.pathname === '/' ? '' : window.location.pathname);
   const scope = "email profile openid";
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token%20id_token&scope=${encodeURIComponent(scope)}&nonce=${Date.now()}`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token%20id_token&scope=${encodeURIComponent(scope)}&prompt=select_account&nonce=${Date.now()}`;
   window.location.href = authUrl;
 }
 
@@ -1456,8 +1424,29 @@ function initGoogleAuth() {
   }
 }
 
+function initSupabaseAuth() {
+  if (typeof window !== "undefined" && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      sb.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          handleSupabaseAuthUser(session.user);
+        }
+      });
+      sb.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          handleSupabaseAuthUser(session.user);
+        }
+      });
+    } catch (e) {
+      console.warn("Supabase init error:", e);
+    }
+  }
+}
+
 window.addEventListener("load", () => {
   initGoogleAuth();
+  initSupabaseAuth();
   checkOAuthRedirectHash();
 });
 
@@ -1573,88 +1562,82 @@ window.handleLoginSubmit = async function(e) {
 };
 
 // ============================================
-// REGISTER FLOW: STEP 1 (EMAIL/PHONE -> GET OTP)
+// REGISTER FLOW: STEP 1 (EMAIL -> GET OTP)
 // ============================================
-window.handleRequestRegisterOTP = function(e) {
+window.handleRequestRegisterOTP = async function(e) {
   e.preventDefault();
   hideAuthAlert();
 
-  const name = (document.getElementById('reg-name')?.value || '').trim();
-  const role = (document.getElementById('reg-role')?.value || 'Senior Platform Engineer').trim();
-  const contact = (document.getElementById('reg-contact')?.value || '').trim();
-  const password = (document.getElementById('reg-password')?.value || '').trim();
+  const nameInput = document.getElementById('reg-name');
+  const contactInput = document.getElementById('reg-contact');
+  const roleInput = document.getElementById('reg-role');
 
-  if (!name) {
-    showAuthAlert('Please provide your full name.');
+  const name = nameInput?.value?.trim() || 'Engineer';
+  const email = contactInput?.value?.trim().toLowerCase() || '';
+  const role = roleInput?.value || 'Senior Platform Engineer';
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showAuthAlert('Please enter a valid email address.');
     return;
   }
 
-  if (!contact) {
-    showAuthAlert('Please enter your email address or phone number.');
-    return;
-  }
-
-  // Validate contact format
-  const isEmail = contact.includes('@');
-  const digits = contact.replace(/\D/g, '');
-  if (!isEmail && digits.length < 7) {
-    showAuthAlert('Please enter a valid phone number (at least 7 digits) or an email address.');
-    return;
-  }
-
-  if (!password || password.length < 6) {
-    showAuthAlert('Security password must be at least 6 characters long.');
-    return;
-  }
-
-  // Save pending registration in memory
+  // Save pending registration in memory (passwordless â€” OTP is the only factor)
   state.pendingRegistration = {
     name,
     role,
-    contact,
-    password,
-    isEmail
+    contact: email,
+    email,
+    isEmail: true
   };
 
-  // Generate fallback OTP internally (only used if server is completely offline)
-  state.currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
+  const btn = document.getElementById('btn-request-otp');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'SENDING CODE...';
+  }
 
-  // Dispatch OTP securely to backend API (dispatches to real SMS / Email)
-  if (state.isLiveApiConnected) {
-    fetch(`${API_BASE}/api/auth/send-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contact, purpose: 'registration' })
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.devCode) {
-          state.currentOTP = data.devCode;
-          const noticeText = document.getElementById('otp-notice-text');
-          if (noticeText) {
-            noticeText.innerHTML = `Test Mode Code: <strong style="color:#aa8453;font-size:14px;letter-spacing:1px">${data.devCode}</strong> &mdash; <button type="button" onclick="autofillCurrentOTP()" style="background:#aa8453;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:4px">Auto-fill Code</button><br><span style="font-size:10px;color:#9ca3af">(To receive direct inbox emails, configure a Gmail App Password in server/.env)</span>`;
-          }
-          setTimeout(() => { if (typeof autofillCurrentOTP === 'function') autofillCurrentOTP(); }, 350);
-        } else if (data.emailDelivered) {
-          const noticeText = document.getElementById('otp-notice-text');
-          if (noticeText) {
-            noticeText.innerHTML = `âœ… Verification code delivered to your email inbox <strong>${contact}</strong>. Please check your inbox and spam folder.`;
-          }
+  // 1. Supabase OTP Dispatch (signInWithOtp)
+  if (typeof window !== 'undefined' && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      sb.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true
         }
-      })
-      .catch(err => console.warn('OTP API dispatch notice:', err));
+      }).then(({ data, error }) => {
+        if (error) {
+          console.warn('Supabase signInWithOtp notice:', error.message);
+        } else {
+          console.log('Supabase OTP sent successfully to', email);
+        }
+      });
+    } catch (sbErr) {
+      console.warn('Supabase OTP exception:', sbErr);
+    }
   }
 
-  // Update Step 2 UI displays
-  const noticeText = document.getElementById('otp-notice-text');
-  const noticeIcon = document.getElementById('otp-notice-icon');
-  if (noticeText) {
-    noticeText.textContent = isEmail
-      ? `Verification code dispatched to your email inbox (${contact}).`
-      : `Verification code dispatched via SMS to your mobile phone (${contact}). Check your SMS messages.`;
-  }
-  if (noticeIcon) {
-    noticeIcon.textContent = isEmail ? 'mark_email_read' : 'sms';
+  // 2. Secondary / Local Backend API Dispatch (SMTP email / console log)
+  state.currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
+  if (state.isLiveApiConnected) {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact: email, purpose: 'registration' })
+      });
+      const data = await res.json();
+      if (data.devCode) {
+        state.currentOTP = data.devCode;
+        const noticeText = document.getElementById('otp-notice-text');
+        if (noticeText) {
+          noticeText.innerHTML = `Verification code sent to <strong>${email}</strong>.<br><span style="color:#aa8453;font-size:12px">Test Mode Code: <strong>${data.devCode}</strong></span> &mdash; <button type="button" onclick="autofillCurrentOTP()" style="background:#aa8453;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer">Auto-fill</button>`;
+        }
+        setTimeout(() => { if (typeof autofillCurrentOTP === 'function') autofillCurrentOTP(); }, 350);
+      }
+    } catch (apiErr) {
+      console.warn('Backend API OTP dispatch notice:', apiErr);
+    }
   }
 
   // Transition views: Step 1 -> Step 2
@@ -1662,6 +1645,16 @@ window.handleRequestRegisterOTP = function(e) {
   const regStep2 = document.getElementById('reg-step-2');
   if (regStep1) regStep1.style.display = 'none';
   if (regStep2) regStep2.style.display = 'block';
+
+  // Update notice if not already set by devCode
+  const noticeText = document.getElementById('otp-notice-text');
+  const noticeIcon = document.getElementById('otp-notice-icon');
+  if (noticeText && !noticeText.innerHTML.includes('Test Mode Code')) {
+    noticeText.innerHTML = `Verification code dispatched to <strong>${email}</strong>. Check your inbox and spam folder.`;
+  }
+  if (noticeIcon) {
+    noticeIcon.textContent = 'mark_email_read';
+  }
 
   // Clear OTP boxes and focus first
   for (let i = 1; i <= 6; i++) {
@@ -1674,9 +1667,13 @@ window.handleRequestRegisterOTP = function(e) {
   }, 100);
 
   startOtpCountdown(30);
-  const destination = isEmail ? 'email inbox' : 'mobile phone via SMS';
-  showAuthAlert(`Verification code dispatched to your ${destination}. Please enter the 6-digit code.`, true);
-  showToast(isEmail ? `Verification code sent to your email.` : `Verification code sent to your mobile phone via SMS.`);
+  showAuthAlert(`Verification code dispatched to ${email}. Please enter the 6-digit code.`, true);
+  showToast(`Verification code sent to ${email}`);
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'SEND VERIFICATION CODE';
+  }
 };
 
 // Countdown timer for resending OTP
@@ -1705,37 +1702,45 @@ function startOtpCountdown(seconds = 30) {
 }
 
 // Resend fresh OTP securely
-window.resendRegisterOTP = function() {
+window.resendRegisterOTP = async function() {
   const p = state.pendingRegistration;
-  const contact = p?.contact || 'your mobile device';
-  const isEmail = p?.isEmail ?? contact.includes('@');
+  const email = p?.contact || '';
+  if (!email) {
+    backToRegisterStep1();
+    return;
+  }
+
+  if (typeof window !== 'undefined' && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    } catch (e) {
+      console.warn('Supabase resend OTP notice:', e);
+    }
+  }
 
   state.currentOTP = Math.floor(100000 + Math.random() * 900000).toString();
-
-  if (state.isLiveApiConnected && p?.contact) {
-    fetch(`${API_BASE}/api/auth/send-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contact: p.contact, purpose: 'registration_resend' })
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.devCode) {
-          state.currentOTP = data.devCode;
-          const noticeText = document.getElementById('otp-notice-text');
-          if (noticeText) {
-            noticeText.innerHTML = `Test Mode Code: <strong style="color:#aa8453;font-size:14px;letter-spacing:1px">${data.devCode}</strong> &mdash; <button type="button" onclick="autofillCurrentOTP()" style="background:#aa8453;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:4px">Auto-fill Code</button>`;
-          }
-          setTimeout(() => { if (typeof autofillCurrentOTP === 'function') autofillCurrentOTP(); }, 350);
+  if (state.isLiveApiConnected) {
+    try {
+      const r = await fetch(`${API_BASE}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact: email, purpose: 'registration_resend' })
+      });
+      const data = await r.json();
+      if (data.devCode) {
+        state.currentOTP = data.devCode;
+        const noticeText = document.getElementById('otp-notice-text');
+        if (noticeText) {
+          noticeText.innerHTML = `New code sent to <strong>${email}</strong>.<br><span style="color:#aa8453;font-size:12px">Test Mode Code: <strong>${data.devCode}</strong></span> &mdash; <button type="button" onclick="autofillCurrentOTP()" style="background:#aa8453;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer">Auto-fill</button>`;
         }
-      })
-      .catch(err => console.warn('OTP resend error:', err));
+      }
+    } catch (_) {}
   }
 
   startOtpCountdown(30);
-  const targetName = isEmail ? 'email inbox' : 'mobile phone via SMS';
-  showAuthAlert(`A new 6-digit verification code has been dispatched to your ${targetName}.`, true);
-  showToast(isEmail ? 'New verification code sent to your email.' : 'New verification code sent to your mobile phone via SMS.');
+  showAuthAlert(`A new 6-digit verification code has been dispatched to ${email}.`, true);
+  showToast('New verification code sent to your email.');
 };
 
 // Insert verification code into digit boxes
@@ -1748,7 +1753,7 @@ window.autofillCurrentOTP = function() {
   });
   const lastEl = document.getElementById('otp-6');
   if (lastEl) lastEl.focus();
-  showAuthAlert(`Verification code entered. Click "VERIFY & REGISTER" to continue.`, true);
+  showAuthAlert(`Verification code entered. Click "VERIFY CODE" to continue.`, true);
 };
 
 // Handle single digit input and auto-advance
@@ -1812,102 +1817,112 @@ window.verifyRegisterOTP = async function() {
   }
 
   if (enteredOtp.length < 6) {
-    showAuthAlert('Please enter all 6 digits of the OTP verification code.');
+    showAuthAlert('Please enter all 6 digits of your verification code.');
     return;
   }
 
   const p = state.pendingRegistration;
-  if (!p) {
+  if (!p || !p.contact) {
     showAuthAlert('Registration session expired. Please start again.');
     backToRegisterStep1();
     return;
   }
 
-  // Verify OTP via backend API (or fallback if offline)
+  const email = p.contact.toLowerCase();
+  const name = p.name || email.split('@')[0];
+  const role = p.role || 'Senior Platform Engineer';
+
+  const btn = document.getElementById('btn-verify-otp');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'VERIFYING...';
+  }
+
   let verified = false;
-  if (state.isLiveApiConnected && p.contact) {
+
+  // 1. Supabase OTP verification (verifyOtp)
+  if (typeof window !== 'undefined' && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      const { data, error } = await sb.auth.verifyOtp({
+        email,
+        token: enteredOtp,
+        type: 'email'
+      });
+      if (!error && data?.user) {
+        verified = true;
+      } else if (error) {
+        console.warn('Supabase verifyOtp notice:', error.message);
+      }
+    } catch (sbErr) {
+      console.warn('Supabase verifyOtp exception:', sbErr);
+    }
+  }
+
+  // 2. Backend verification / test mode fallback
+  if (!verified && state.isLiveApiConnected) {
     try {
       const vRes = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact: p.contact, otp: enteredOtp })
+        body: JSON.stringify({ contact: email, otp: enteredOtp })
       });
       const vData = await vRes.json();
       if (vData.success && vData.verified) {
         verified = true;
-      } else {
-        const targetType = p.isEmail ? 'email inbox' : 'SMS mobile messages';
-        showAuthAlert(vData.error || `Invalid verification code. Please check your ${targetType} and try again.`);
-        return;
       }
     } catch (_) {}
   }
 
+  // 3. Fallback code match
   if (!verified) {
-    if (enteredOtp !== state.currentOTP && enteredOtp !== '123456' && enteredOtp !== '749102') {
-      const targetType = p.isEmail ? 'email inbox' : 'mobile SMS messages';
-      showAuthAlert(`Invalid verification code. Please check your ${targetType} and try again.`);
-      return;
+    if (enteredOtp === state.currentOTP || enteredOtp === '123456' || enteredOtp === '749102') {
+      verified = true;
     }
   }
 
-  // Derive custom User ID from email or phone
-  let derivedUserId = '';
-  if (p.isEmail) {
-    derivedUserId = p.contact.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
-  } else {
-    derivedUserId = p.name.toLowerCase().replace(/\s+/g, '.') + '_' + p.contact.replace(/\D/g, '').slice(-4);
+  if (!verified) {
+    showAuthAlert('Invalid or expired verification code. Please check your inbox and try again.');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'VERIFY CODE';
+    }
+    return;
   }
 
-  const users = getRegisteredUsers();
-  const newUser = {
+  const derivedUserId = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('').toUpperCase() || 'CP';
+
+  const authenticatedUser = {
     id: `usr-${Date.now()}`,
     userId: derivedUserId,
-    name: p.name,
-    role: p.role,
-    contact: p.contact,
-    email: p.isEmail ? p.contact : `${derivedUserId}@enterprise.io`,
-    phone: !p.isEmail ? p.contact : '',
-    password: p.password,
-    avatar: getInitials(p.name),
+    name,
+    email,
+    role,
+    contact: email,
+    avatar: initials,
     verifiedWithOtp: true,
-    verifiedAt: new Date().toISOString()
+    verifiedAt: new Date().toISOString(),
+    provider: 'supabase-otp'
   };
 
-  users.push(newUser);
+  const users = getRegisteredUsers();
+  users.push(authenticatedUser);
   saveRegisteredUsers(users);
 
-  // Sync with backend API to register and obtain real JWT token
-  if (state.isLiveApiConnected) {
-    try {
-      const regRes = await fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newUser.name,
-          email: newUser.email,
-          password: newUser.password,
-          role: newUser.role
-        })
-      });
-      const regData = await regRes.json();
-      if (regData.token) {
-        newUser.token = regData.token;
-        try {
-          localStorage.setItem('cloudprune_token', regData.token);
-        } catch (_) {}
-      }
-    } catch (_) {}
-  }
-
-  state.currentUser = newUser;
+  state.currentUser = authenticatedUser;
   try {
-    localStorage.setItem('cloudprune_user', JSON.stringify(newUser));
+    localStorage.setItem('cloudprune_user', JSON.stringify(authenticatedUser));
   } catch (_) {}
 
-  closeAuthModal();
   renderAuthState();
-  showToast(`Identity verified with OTP! Welcome, ${newUser.name}. Your User ID is: ${newUser.userId}`);
+  closeAuthModal();
+  showToast(`Welcome, ${name}! Your email has been verified.`);
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'VERIFY CODE';
+  }
 };
 
 // Sign Out Handler
@@ -1916,6 +1931,11 @@ window.logoutUser = function() {
   state.currentUser = null;
   try {
     localStorage.removeItem('cloudprune_user');
+    localStorage.removeItem('cloudprune_token');
+    if (typeof window !== 'undefined' && window.supabase && SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+      const sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+      sb.auth.signOut().catch(() => {});
+    }
   } catch (_) {}
   renderAuthState();
   showToast(`Signed out successfully. Session for ${previousName} terminated.`);
