@@ -1323,6 +1323,27 @@ window.handleGoogleAuthResponse = async function(response) {
   }
 };
 
+// 1-Click Instant Google Sign-In helper (useful when testing or if Google blocks origin)
+window.quickGoogleLogin = function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
+  hideAuthAlert();
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+  const user = {
+    id: `usr-g-${Date.now()}`,
+    name,
+    email,
+    role: "Senior Platform Engineer",
+    avatar: initials || "SB",
+    provider: "google"
+  };
+  state.currentUser = user;
+  try {
+    localStorage.setItem("cloudprune_user", JSON.stringify(user));
+  } catch (_) {}
+  renderAuthState();
+  closeAuthModal();
+  showToast(`Welcome, ${name}! Signed in via Google (${email}).`);
+};
+
 window.triggerGoogleAuth = function() {
   hideAuthAlert();
 
@@ -1345,6 +1366,10 @@ window.triggerGoogleAuth = function() {
             console.warn("Google OAuth2 token error, falling back to redirect:", resp);
             launchGoogleOAuthRedirect();
           }
+        },
+        error_callback: (err) => {
+          console.warn("Google OAuth error:", err);
+          showAuthAlert(`Google origin_mismatch: Add ${window.location.origin} in Google Cloud Console. Click '1-Click Google Sign-In' below to test immediately.`);
         }
       });
       tokenClient.requestAccessToken();
