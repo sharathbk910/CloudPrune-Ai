@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0b0f19;
+    color: #f3f4f6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ─── Accessibility: Focus Ring ─────────────────────────────── */
+  *:focus-visible {
+    outline: 2px solid #6366F1;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Reduced motion for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* High contrast mode support */
+  @media (forced-colors: active) {
+    .bg-gray-900\/80, .bg-gray-950\/60, .bg-gray-950 {
+      background-color: Canvas;
+      border-color: CanvasText;
+    }
+  }
+}
+
+@layer components {
+  /* ─── Skip to Content (Accessibility) ────────────────────── */
+  .skip-to-content {
+    position: absolute;
+    top: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    background: #6366F1;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: top 0.2s;
+  }
+  .skip-to-content:focus {
+    top: 12px;
+  }
+
+  /* ─── Animations ─────────────────────────────────────────── */
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1000; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .animate-slideDown { animation: slideDown 0.3s ease-out; }
+  .animate-slideUp { animation: slideUp 0.3s ease-out; }
+  .animate-fadeIn { animation: fadeIn 0.25s ease-out; }
+  .animate-draw { animation: draw 1.5s ease-out; }
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+}
+
+/* ─── Custom Scrollbars ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* ─── Print Styles ─────────────────────────────────────────── */
+@media print {
+  body { background: white; color: black; }
+  nav, .fixed, button { display: none !important; }
+  .bg-gray-900\/80 { background: white; border: 1px solid #ccc; }
+}
+
+/* ─── Responsive Typography ────────────────────────────────── */
+@media (max-width: 640px) {
+  h1 { font-size: 1.25rem !important; }
+  h2 { font-size: 1rem !important; }
+}

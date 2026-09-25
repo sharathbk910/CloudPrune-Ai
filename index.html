@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CloudPrune AI — Autonomous FinOps Agent & Cloud Cost Optimizer</title>
+  <meta name="description" content="Autonomous FinOps Agent that identifies idle cloud compute, prevents budget waste, and executes human-in-the-loop termination powered by Gemini 3.8 Flash."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Google Identity Services (OAuth 2.0 / Sign In With Google) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="finops-toast" class="finops-toast">
+    <span class="material-symbols-outlined" style="font-size:18px;color:#34d399">verified</span>
+    <span id="toast-msg">CloudPrune Engine initialized.</span>
+  </div>
+
+  <!-- ====== HEADER / NAVBAR ====== -->
+  <header id="site-header">
+    <div class="header-inner">
+      <div class="header-left">
+        <a href="#" class="brand">
+          <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#c5a880,#aa8453);display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(16,185,129,0.3)">
+            <span class="material-symbols-outlined" style="color:#fff;font-size:22px">cloud_sync</span>
+          </div>
+          <span class="brand-name" style="letter-spacing:-0.02em">CloudPrune<span style="color:#c5a880">.AI</span></span>
+        </a>
+      </div>
+      <nav class="header-nav" id="main-nav">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#features">Features</a>
+        <a href="#testimonials">Reviews</a>
+        <a href="#pricing">Pricing</a>
+      </nav>
+      <div class="header-right" id="header-auth-container">
+        <!-- Rendered dynamically by app.js: Logged out shows Sign In & Register; Logged in shows User Chip & Logout -->
+        <button class="btn-nav-login" id="btn-open-login" onclick="openAuthModal('login')">
+          <span class="material-symbols-outlined" style="font-size:16px">lock</span>
+          <span>Sign In</span>
+        </button>
+        <button class="btn-primary-sm" id="btn-open-register" onclick="openAuthModal('register')">
+          <span class="material-symbols-outlined" style="font-size:16px">person_add</span>
+          <span>Register</span>
+        </button>
+        <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+      </div>
+    </div>
+    <!-- Mobile Nav Overlay -->
+    <div class="mobile-nav" id="mobile-nav">
+      <a href="#dashboard" onclick="closeMobileNav()">Dashboard</a>
+      <a href="#features" onclick="closeMobileNav()">Features</a>
+      <a href="#testimonials" onclick="closeMobileNav()">Reviews</a>
+      <a href="#pricing" onclick="closeMobileNav()">Pricing</a>
+      <div id="mobile-auth-container" style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+        <button class="btn-nav-login" style="width:100%;justify-content:center" onclick="closeMobileNav(); openAuthModal('login')">
+          <span class="material-symbols-outlined" style="font-size:16px">lock</span>
+          <span>Sign In</span>
+        </button>
+        <button class="btn-primary-sm" style="width:100%;justify-content:center" onclick="closeMobileNav(); openAuthModal('register')">
+          <span class="material-symbols-outlined" style="font-size:16px">person_add</span>
+          <span>Register</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====== HERO SECTION WITH VIDEO BACKGROUND ====== -->
+  <section id="hero">
+    <!-- Video Background -->
+    <div class="hero-video-wrapper">
+      <video autoplay muted playsinline id="hero-video">
+        <source src="gemini_generated_video_a53d7be8.mp4" type="video/mp4"/>
+      </video>
+      <div class="hero-video-overlay"></div>
+    </div>
+
+    <!-- Hero Content -->
+    <div class="hero-content">
+      <h1 class="hero-headline">
+        Prune idle cloud waste with
+        <span class="gradient-text">autonomous AI precision</span>
+      </h1>
+
+
+      <!-- CTA Buttons -->
+      <div class="hero-ctas">
+        <a href="#dashboard" class="btn-primary" id="hero-cta-primary">
+          <span>Run Free Infrastructure Audit</span>
+          <span class="material-symbols-outlined btn-icon">arrow_downward</span>
+        </a>
+        <button class="btn-glass" onclick="toggleAuditDrawer(true)">
+          <span class="material-symbols-outlined btn-icon-left">history</span>
+          <span>View Audit Trail</span>
+        </button>
+      </div>
+
+      <!-- Trust Signals -->
+      <div class="trust-signals">
+        <span class="trust-item">
+          <span class="material-symbols-outlined trust-icon">check_circle</span>
+          Human Approval Required
+        </span>
+        <span class="trust-divider">•</span>
+        <span class="trust-item">
+          <span class="material-symbols-outlined trust-icon">check_circle</span>
+          Zero Downtime Risk
+        </span>
+        <span class="trust-divider">•</span>
+        <span class="trust-item">
+          <span class="material-symbols-outlined trust-icon">check_circle</span>
+          SOC2 Type II Certified
+        </span>
+      </div>
+    </div>
+
+    <!-- Scroll Indicator -->
+    <div class="scroll-indicator">
+      <span class="material-symbols-outlined">keyboard_arrow_down</span>
+    </div>
+  </section>
+
+  <!-- ====== INTERACTIVE FINOPS LIVE DASHBOARD ====== -->
+  <section id="dashboard">
+    <div class="dashboard-wrapper">
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="dashboard-title-area">
+          <h2>Live Cloud Infrastructure Telemetry</h2>
+          <p>Real-time compute utilization and automated waste detection</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-secondary-action" id="btn-open-add-instance" onclick="openAddInstanceModal()" style="background:rgba(170,132,83,0.18);border-color:rgba(170,132,83,0.5);color:#fbf7ee;font-weight:600">
+            <span class="material-symbols-outlined" style="font-size:16px;color:#c5a880">add_circle</span>
+            <span>Add Instance</span>
+          </button>
+          <button class="btn-secondary-action" onclick="toggleAuditDrawer(true)">
+            <span class="material-symbols-outlined" style="font-size:16px">receipt_long</span>
+            <span>Audit Trail</span>
+          </button>
+          <button class="btn-secondary-action" onclick="resetSeedData()">
+            <span class="material-symbols-outlined" style="font-size:16px">restart_alt</span>
+            <span>Reset Demo Data</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1. KPI Metrics Grid -->
+      <div class="finops-kpi-grid">
+        <!-- Monthly Spend -->
+        <div class="finops-kpi-card">
+          <div class="kpi-top">
+            <span>Total Monthly Spend</span>
+            <span class="material-symbols-outlined kpi-icon" style="color:var(--primary)">payments</span>
+          </div>
+          <div class="kpi-value" id="metric-spend">$2,065.34</div>
+          <div class="kpi-sub">Across 10 monitored instances</div>
+        </div>
+
+        <!-- Estimated Waste -->
+        <div class="finops-kpi-card waste-card">
+          <div class="kpi-top">
+            <span style="color:#f87171">Estimated Waste (Zombies)</span>
+            <span class="material-symbols-outlined kpi-icon" style="color:#f87171">warning</span>
+          </div>
+          <div class="kpi-value waste-val" id="metric-waste">$1,430.51</div>
+          <div class="kpi-sub">Identified by sub-5% CPU & stale tags</div>
+        </div>
+
+        <!-- Infrastructure Health -->
+        <div class="finops-kpi-card">
+          <div class="kpi-top">
+            <span>Server Health</span>
+            <span class="material-symbols-outlined kpi-icon" style="color:#f59e0b">dns</span>
+          </div>
+          <div class="kpi-value" id="metric-health">10 Active / 5 Zombies</div>
+          <div class="kpi-sub">Live compute status tracking</div>
+        </div>
+
+        <!-- Total Savings Realized -->
+        <div class="finops-kpi-card savings-card">
+          <div class="kpi-top">
+            <span style="color:#34d399">Savings Realized</span>
+            <span class="material-symbols-outlined kpi-icon" style="color:#34d399">trending_down</span>
+          </div>
+          <div class="kpi-value savings-val" id="metric-savings">$0.00</div>
+          <div class="kpi-sub">Recurring monthly cost reduction</div>
+        </div>
+      </div>
+
+      <!-- 2. Control Action Bar -->
+      <div class="dashboard-actions-bar">
+        <div class="bar-left">
+          <button class="btn-audit" id="btn-run-audit" onclick="triggerAudit()">
+            <span class="material-symbols-outlined" id="audit-spinner" style="display:none;animation:spin 1s linear infinite;font-size:18px">refresh</span>
+            <span class="material-symbols-outlined" style="font-size:18px">auto_awesome</span>
+            <span id="audit-btn-text">Run AI FinOps Audit</span>
+          </button>
+          <span style="font-size:12px;color:var(--outline);display:none" id="audit-status-step"></span>
+        </div>
+
+        <div class="bar-right">
+          <!-- Batch Terminate Button -->
+          <button class="btn-terminate-action" id="btn-batch-terminate" onclick="openAuditModal()" style="display:none">
+            <span class="material-symbols-outlined" style="font-size:18px">delete_forever</span>
+            <span>Approve & Terminate [<span id="batch-terminate-count">0</span>] Instances</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Infrastructure Telemetry Table -->
+      <div class="infra-table-wrapper">
+        <div class="table-toolbar">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <input type="text" class="table-search" placeholder="Search by service name, type, or region..." oninput="handleSearch(this.value)"/>
+            <button class="btn-add-instance-table" onclick="openAddInstanceModal()" title="Add new cloud workload to inventory">
+              <span class="material-symbols-outlined" style="font-size:15px">add</span>
+              <span>Add Instance</span>
+            </button>
+          </div>
+
+          <div class="table-filters">
+            <button class="filter-tab active" id="filter-all" onclick="setFilter('all')">All Nodes</button>
+            <button class="filter-tab" id="filter-running" onclick="setFilter('running')">Running</button>
+            <button class="filter-tab" id="filter-flagged" onclick="setFilter('flagged')">Zombies Only</button>
+            <button class="filter-tab" id="filter-terminated" onclick="setFilter('terminated')">Terminated</button>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="infra-table">
+            <thead>
+              <tr>
+                <th style="width:44px;text-align:center">
+                  <input type="checkbox" onchange="toggleSelectAll()" title="Select/Deselect all running" style="cursor:pointer;accent-color:#aa8453"/>
+                </th>
+                <th>Instance</th>
+                <th>Environment</th>
+                <th>CPU Load</th>
+                <th>Memory</th>
+                <th>Monthly Cost</th>
+                <th>Status</th>
+                <th style="text-align:right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="infra-tbody">
+              <!-- Dynamically populated by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== SOCIAL PROOF ====== -->
+  <section id="social-proof">
+    <p class="section-eyebrow">Trusted by Platform Engineering teams at high-growth enterprises</p>
+    <div class="company-grid">
+      <div class="company-badge"><span class="material-symbols-outlined badge-icon secondary">cloud</span> AWS EC2</div>
+      <div class="company-badge"><span class="material-symbols-outlined badge-icon primary">deployed_code</span> Kubernetes</div>
+      <div class="company-badge"><span class="material-symbols-outlined badge-icon tertiary">savings</span> FinOps Foundation</div>
+      <div class="company-badge"><span class="material-symbols-outlined badge-icon secondary">memory</span> Google Cloud</div>
+      <div class="company-badge wide"><span class="material-symbols-outlined badge-icon primary">security</span> SOC2 Type II Certified</div>
+    </div>
+  </section>
+
+  <!-- ====== FEATURES SECTION ====== -->
+  <section id="features">
+    <div class="section-header">
+      <span class="section-tag secondary">Zero Risk FinOps</span>
+      <h2 class="section-title">Autonomous detection, human-certified control</h2>
+      <p class="section-desc">Traditional scripts break production. CloudPrune AI pairs generative model reasoning with strict approval guardrails.</p>
+    </div>
+
+    <div class="features-grid">
+      <!-- Feature 1 -->
+      <div class="feature-card" id="feature-telemetry">
+        <div class="feature-icon-wrap secondary-bg">
+          <span class="material-symbols-outlined">monitoring</span>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title-row">
+            <h3 class="feature-title">Telemetry Ingestion</h3>
+            <span class="feature-chip secondary">Real-time</span>
+          </div>
+          <p class="feature-desc">Ingests sub-minute CPU, memory, EBS I/O, and network ingress across multi-account AWS and GCP setups with zero agent overhead.</p>
+        </div>
+        <div class="feature-mini-bar">
+          <div class="mini-bar-left">
+            <span class="pulse-dot-sm secondary"></span>
+            <span class="mono-text">CloudWatch Metric Stream → Ingested</span>
+          </div>
+          <span class="material-symbols-outlined mini-bar-icon secondary">sync</span>
+        </div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="feature-card" id="feature-gemini">
+        <div class="feature-icon-wrap primary-bg">
+          <span class="material-symbols-outlined">psychology</span>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title-row">
+            <h3 class="feature-title">Contextual AI Reasoning</h3>
+            <span class="feature-chip primary">High Precision</span>
+          </div>
+          <p class="feature-desc">Synthesizes workload tags, developer branch activity, and traffic patterns to distinguish between temporary jobs and true zombie servers.</p>
+        </div>
+        <div class="feature-mini-bar">
+          <div class="mini-bar-left">
+            <span class="material-symbols-outlined mini-bar-icon primary">verified</span>
+            <span class="mono-text muted">Confidence Score: 98.4%</span>
+          </div>
+          <span class="mono-text primary">Verified</span>
+        </div>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="feature-card" id="feature-hitl">
+        <div class="feature-icon-wrap tertiary-bg">
+          <span class="material-symbols-outlined">shield_person</span>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title-row">
+            <h3 class="feature-title">Human-in-the-Loop Control</h3>
+            <span class="feature-chip tertiary">Zero Accidental Loss</span>
+          </div>
+          <p class="feature-desc">No instance is ever terminated autonomously. Engineering leads review generated justifications and approve with 1-click.</p>
+        </div>
+        <div class="feature-tags">
+          <span class="feature-tag">Safety Snapshots</span>
+          <span class="feature-tag">Rollback Protection</span>
+        </div>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="feature-card" id="feature-savings">
+        <div class="feature-icon-wrap secondary-bg">
+          <span class="material-symbols-outlined">account_balance_wallet</span>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title-row">
+            <h3 class="feature-title">Instant ROI Tracking</h3>
+            <span class="feature-chip secondary">Net Realized</span>
+          </div>
+          <p class="feature-desc">Track real-time monthly budget reclaimed, historical audit logs, and export executive reports for VP of Infrastructure review.</p>
+        </div>
+        <div class="feature-mini-bar">
+          <div class="mini-bar-left">
+            <span class="material-symbols-outlined mini-bar-icon secondary">trending_down</span>
+            <span class="mono-text muted">Average customer saves $18,400/mo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== TESTIMONIALS SECTION ====== -->
+  <section id="testimonials">
+    <div class="section-header">
+      <span class="section-tag primary">Customer Stories</span>
+      <h2 class="section-title">Endorsed by Cloud Leaders</h2>
+    </div>
+
+    <div class="testimonials-grid">
+      <!-- Testimonial 1 -->
+      <div class="testimonial-card">
+        <div class="stars">
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+        </div>
+        <p class="testimonial-quote">"CloudPrune recovered $24,000 in monthly AWS spend within our first week. The AI reasoning accurately identified abandoned PR testbeds without ever touching our core production APIs."</p>
+        <div class="testimonial-author">
+          <div style="width:44px;height:44px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">ER</div>
+          <div>
+            <div class="author-name">Elena Rostova</div>
+            <div class="author-role">VP of Platform Infrastructure • Synthetix</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Testimonial 2 -->
+      <div class="testimonial-card">
+        <div class="stars">
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+          <span class="material-symbols-outlined star">star</span>
+        </div>
+        <p class="testimonial-quote">"The human-in-the-loop termination modal gives our SRE team total peace of mind. We audit 300+ staging nodes with a single click and have zero rogue cloud compute."</p>
+        <div class="testimonial-author">
+          <div style="width:44px;height:44px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">MV</div>
+          <div>
+            <div class="author-name">Marcus Vance</div>
+            <div class="author-role">Head of DevOps • Kinetiq Labs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== PRICING SECTION ====== -->
+  <section id="pricing">
+    <div class="section-header center">
+      <span class="section-tag tertiary">Predictable FinOps ROI</span>
+      <h2 class="section-title">Pays for itself on Day 1</h2>
+    </div>
+
+    <!-- Pricing Card -->
+    <div class="pricing-card" id="pricing-pro">
+      <div class="pricing-glow"></div>
+      <div class="pricing-header">
+        <div>
+          <h3 class="pricing-plan-name">FinOps Team Edition</h3>
+          <p class="pricing-plan-desc">For fast-moving engineering teams managing cloud infrastructure</p>
+        </div>
+        <span class="popular-badge">High ROI</span>
+      </div>
+      <div class="pricing-price">
+        <span class="price-value">$99</span>
+        <span class="price-period">/month</span>
+      </div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="material-symbols-outlined pf-icon">check_circle</span> Unlimited Autonomous Audits</div>
+        <div class="pricing-feature"><span class="material-symbols-outlined pf-icon">check_circle</span> Up to 500 Compute Nodes Monitored</div>
+        <div class="pricing-feature"><span class="material-symbols-outlined pf-icon">check_circle</span> Human-in-the-Loop Safe Termination</div>
+        <div class="pricing-feature"><span class="material-symbols-outlined pf-icon">check_circle</span> Pre-decommission volume retention snapshots</div>
+        <div class="pricing-feature"><span class="material-symbols-outlined pf-icon">check_circle</span> Permanent Audit Log & Slack alerts</div>
+      </div>
+      <a href="#dashboard" class="btn-primary full-width">
+        <span>Test Drive On Live Dashboard</span>
+        <span class="material-symbols-outlined btn-icon">arrow_forward</span>
+      </a>
+      <p class="pricing-note">Average customer recovers 8x plan cost in week 1</p>
+    </div>
+  </section>
+
+  <!-- ====== FINAL CTA ====== -->
+  <section id="cta-final">
+    <div class="cta-card">
+      <div class="cta-glow"></div>
+      <div class="cta-icon-wrap">
+        <span class="material-symbols-outlined cta-icon">rocket_launch</span>
+      </div>
+      <h2 class="cta-title">Eliminate zombie cloud spend today</h2>
+      <p class="cta-desc">Launch an automated audit on your infrastructure in seconds. No agent installation needed.</p>
+      <div class="cta-form">
+        <input type="email" class="cta-input" placeholder="Enter work email for savings report" id="cta-email"/>
+        <button class="btn-primary" onclick="showToast('Audit report dispatched to your inbox!', 'success')">
+          <span>Get Free Savings Report</span>
+          <span class="material-symbols-outlined btn-icon">bolt</span>
+        </button>
+      </div>
+      <p class="cta-note">Instant analysis • Strict data privacy guarantee</p>
+    </div>
+  </section>
+
+  <!-- ====== FOOTER ====== -->
+  <footer id="site-footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-brand-col">
+          <div class="brand">
+            <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#c5a880,#aa8453);display:flex;align-items:center;justify-content:center">
+              <span class="material-symbols-outlined" style="color:#fff;font-size:18px">cloud_sync</span>
+            </div>
+            <span class="brand-name">CloudPrune<span style="color:#c5a880">.AI</span></span>
+          </div>
+          <p class="footer-tagline">Autonomous FinOps platform enabling engineering teams to eliminate idle cloud compute with AI precision.</p>
+        </div>
+
+        <div class="footer-links-grid">
+          <div class="footer-col">
+            <div class="footer-col-title">Capabilities</div>
+            <a href="#dashboard">Live Telemetry</a>
+            <a href="#dashboard">Automated Audits</a>
+            <a href="#dashboard">Human-in-the-Loop</a>
+            <a href="#dashboard">Safety Snapshots</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Platform</div>
+            <a href="#">AWS Support</a>
+            <a href="#">Google Cloud Engine</a>
+            <a href="#">Azure Compute</a>
+            <a href="#">Kubernetes Pods</a>
+          </div>
+          <div class="footer-col">
+            <div class="footer-col-title">Trust & Security</div>
+            <a href="#">SOC2 Type II Report</a>
+            <a href="#">Least-Privilege IAM</a>
+            <a href="#">Zero Retention Policy</a>
+            <a href="#">Status Page</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div class="copyright">© 2026 CloudPrune AI, Inc. All rights reserved.</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ====== AUDIT RESULTS MODAL ====== -->
+  <div class="modal-overlay" id="audit-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:10px;background:rgba(170,132,83,0.2);display:flex;align-items:center;justify-content:center;color:#c5a880">
+            <span class="material-symbols-outlined" style="font-size:20px">psychology</span>
+          </div>
+          <div>
+            <h3 style="font-size:1.1rem;font-weight:700;color:#fff">Autonomous FinOps Audit Results</h3>
+            <span style="font-size:11px;color:var(--outline);font-family:var(--font-mono)">Verified Workload Optimization Report</span>
+          </div>
+        </div>
+        <button onclick="closeAuditModal()" style="color:var(--outline);font-size:24px;cursor:pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Executive Summary -->
+        <div class="exec-summary-box">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#c5a880;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+            <span class="material-symbols-outlined" style="font-size:14px">verified</span>
+            Executive Summary
+          </div>
+          <p id="modal-exec-summary" style="font-size:13.5px;color:#e2e8f0;line-height:1.6"></p>
+        </div>
+
+        <!-- Waste Metrics -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:var(--radius);padding:14px">
+            <div style="font-size:11px;color:#f87171;font-weight:600;text-transform:uppercase">Identified Monthly Waste</div>
+            <div id="modal-waste-val" style="font-family:var(--font-mono);font-size:1.6rem;font-weight:800;color:#f87171;margin-top:4px">$0.00</div>
+          </div>
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:var(--radius);padding:14px">
+            <div style="font-size:11px;color:#34d399;font-weight:600;text-transform:uppercase">Flagged Zombie Servers</div>
+            <div id="modal-flagged-count" style="font-family:var(--font-mono);font-size:1.6rem;font-weight:800;color:#34d399;margin-top:4px">0</div>
+          </div>
+        </div>
+
+        <!-- Action Plan -->
+        <div class="action-plan-box">
+          <div style="font-size:11px;font-weight:600;color:var(--outline);text-transform:uppercase;margin-bottom:6px">Recommended Action Plan</div>
+          <div id="modal-action-plan" style="color:#cbd5e1;white-space:pre-line"></div>
+        </div>
+
+        <!-- Flagged List -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">Flagged Zombie Nodes for Human Confirmation</div>
+          <div id="modal-flagged-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span style="font-size:11px;color:var(--outline)">Human-in-the-loop required. No servers terminate without your click.</span>
+        <div style="display:flex;gap:10px">
+          <button class="btn-secondary-action" onclick="closeAuditModal()">Cancel</button>
+          <button class="btn-terminate-action" id="modal-approve-btn" onclick="approveAndTerminate()">
+            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+            <span>Approve & Terminate</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== AUDIT LOG DRAWER ====== -->
+  <div class="modal-overlay" id="audit-drawer" style="justify-content:flex-end;padding:0">
+    <div style="background:var(--surface-container-low);border-left:1px solid var(--finops-border);width:100%;max-width:440px;height:100%;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,0.8)">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--finops-border);display:flex;justify-content:space-between;align-items:center;background:rgba(10,14,24,0.7)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="material-symbols-outlined" style="color:var(--primary)">receipt_long</span>
+          <h3 style="font-size:1rem;font-weight:700;color:#fff">FinOps Audit Trail</h3>
+        </div>
+        <button onclick="toggleAuditDrawer(false)" style="color:var(--outline);cursor:pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div id="drawer-log-list" style="padding:20px;overflow-y:auto;flex:1">
+        <!-- Dynamically rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== ADD INSTANCE MODAL ====== -->
+  <div class="modal-overlay" id="add-instance-modal">
+    <div class="modal-card add-instance-card">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(170,132,83,0.2);display:flex;align-items:center;justify-content:center;color:#c5a880">
+            <span class="material-symbols-outlined" style="font-size:22px">add_to_queue</span>
+          </div>
+          <div>
+            <h3 style="font-size:1.1rem;font-weight:700;color:#fff">Add Cloud Instance</h3>
+            <span style="font-size:11px;color:var(--outline);font-family:var(--font-mono)">Provision workload to live FinOps telemetry</span>
+          </div>
+        </div>
+        <button onclick="closeAddInstanceModal()" style="color:var(--outline);font-size:24px;cursor:pointer;background:none;border:none" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="add-instance-form" onsubmit="handleAddInstanceSubmit(event)">
+        <div class="modal-body" style="gap:16px">
+
+          <!-- Quick Templates Bar -->
+          <div class="quick-template-row">
+            <span style="font-size:11.5px;color:#94a3b8;font-weight:600">Templates:</span>
+            <button type="button" class="preset-chip" onclick="applyInstancePreset('prod')">
+              <span class="material-symbols-outlined" style="font-size:14px;color:#34d399">check_circle</span>
+              <span>Prod API Service</span>
+            </button>
+            <button type="button" class="preset-chip" onclick="applyInstancePreset('zombie')">
+              <span class="material-symbols-outlined" style="font-size:14px;color:#f87171">warning</span>
+              <span>Idle Dev / Zombie</span>
+            </button>
+            <button type="button" class="preset-chip" onclick="applyInstancePreset('gpu')">
+              <span class="material-symbols-outlined" style="font-size:14px;color:#a855f7">memory</span>
+              <span>GPU AI Worker</span>
+            </button>
+          </div>
+
+          <!-- Instance Name -->
+          <div class="form-group-custom">
+            <label for="inst-input-name">Instance / Workload Name <span style="color:#f87171">*</span></label>
+            <input type="text" id="inst-input-name" placeholder="e.g. Payment Gateway Service, Auth Ingest Worker" required class="form-input-custom"/>
+          </div>
+
+          <!-- Type & Region Grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="form-group-custom">
+              <label for="inst-input-type">Instance Type</label>
+              <select id="inst-input-type" class="form-input-custom form-select-custom" onchange="handleTypeChange(this.value)">
+                <option value="t3.micro">t3.micro (2 vCPU, 1 GiB) — ~$10.50/mo</option>
+                <option value="t3.medium" selected>t3.medium (2 vCPU, 4 GiB) — ~$30.37/mo</option>
+                <option value="t3.large">t3.large (2 vCPU, 8 GiB) — ~$60.74/mo</option>
+                <option value="m5.large">m5.large (2 vCPU, 8 GiB) — ~$70.08/mo</option>
+                <option value="m5.xlarge">m5.xlarge (4 vCPU, 16 GiB) — ~$140.16/mo</option>
+                <option value="c5.xlarge">c5.xlarge (4 vCPU, 8 GiB) — ~$124.10/mo</option>
+                <option value="c5.4xlarge">c5.4xlarge (16 vCPU, 32 GiB) — ~$496.40/mo</option>
+                <option value="r5.large">r5.large (2 vCPU, 16 GiB) — ~$91.98/mo</option>
+                <option value="r5.2xlarge">r5.2xlarge (8 vCPU, 64 GiB) — ~$367.92/mo</option>
+                <option value="g4dn.xlarge">g4dn.xlarge (4 vCPU, 16 GiB, 1 GPU) — ~$383.98/mo</option>
+              </select>
+            </div>
+
+            <div class="form-group-custom">
+              <label for="inst-input-region">Cloud Region</label>
+              <select id="inst-input-region" class="form-input-custom form-select-custom">
+                <option value="us-east-1" selected>us-east-1 (N. Virginia)</option>
+                <option value="us-west-2">us-west-2 (Oregon)</option>
+                <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Monthly Cost & Status -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="form-group-custom">
+              <label for="inst-input-cost">Estimated Monthly Cost ($ USD)</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-family:var(--font-mono)">$</span>
+                <input type="number" id="inst-input-cost" step="0.01" min="1" max="100000" value="30.37" required class="form-input-custom" style="padding-left:26px;font-family:var(--font-mono)"/>
+              </div>
+            </div>
+
+            <div class="form-group-custom">
+              <label for="inst-input-status">Initial Status</label>
+              <select id="inst-input-status" class="form-input-custom form-select-custom">
+                <option value="running" selected>Running (Monitored)</option>
+                <option value="terminated">Terminated (Decommissioned)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Utilization Sliders -->
+          <div style="background:var(--surface-container-lowest);border:1px solid var(--finops-border);border-radius:var(--radius-md);padding:14px;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:11.5px;font-weight:700;text-transform:uppercase;color:#c5a880;letter-spacing:0.5px">
+              Telemetry Metrics (Simulated Utilization)
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                <span style="color:#cbd5e1">CPU Utilization</span>
+                <span id="inst-cpu-val" style="font-family:var(--font-mono);font-weight:700;color:#c5a880">24.5%</span>
+              </div>
+              <input type="range" id="inst-input-cpu" min="0" max="100" step="0.5" value="24.5" oninput="document.getElementById('inst-cpu-val').textContent = this.value + '%'" style="width:100%;accent-color:#aa8453;cursor:pointer"/>
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-top:2px">
+                <span>0% (Idle / Zombie)</span>
+                <span>50%</span>
+                <span>100% (High Load)</span>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                <span style="color:#cbd5e1">Memory Utilization</span>
+                <span id="inst-mem-val" style="font-family:var(--font-mono);font-weight:700;color:#c5a880">42.0%</span>
+              </div>
+              <input type="range" id="inst-input-mem" min="0" max="100" step="0.5" value="42.0" oninput="document.getElementById('inst-mem-val').textContent = this.value + '%'" style="width:100%;accent-color:#aa8453;cursor:pointer"/>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div class="form-group-custom">
+            <label for="inst-input-tags">Resource Tags <span style="font-size:11px;color:#94a3b8">(comma-separated)</span></label>
+            <input type="text" id="inst-input-tags" placeholder="e.g. production, web, critical" value="custom, compute" class="form-input-custom"/>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button type="button" class="tag-add-chip" onclick="appendTag('production')">+ production</button>
+              <button type="button" class="tag-add-chip" onclick="appendTag('staging')">+ staging</button>
+              <button type="button" class="tag-add-chip" onclick="appendTag('dev')">+ dev</button>
+              <button type="button" class="tag-add-chip" onclick="appendTag('abandoned')">+ abandoned</button>
+              <button type="button" class="tag-add-chip" onclick="appendTag('zombie-candidate')">+ zombie-candidate</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <span style="font-size:11.5px;color:var(--outline)">Telemetry stream connects immediately upon provisioning.</span>
+          <div style="display:flex;gap:10px">
+            <button type="button" class="btn-secondary-action" onclick="closeAddInstanceModal()">Cancel</button>
+            <button type="submit" id="btn-submit-instance" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;font-size:12.5px">
+              <span class="material-symbols-outlined" style="font-size:16px">rocket_launch</span>
+              <span id="submit-instance-text">Add to Telemetry</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  
+
+  <!-- ====== AUTH / IAM SECURITY MODAL (Matches signup.jpg) ====== -->
+  <div id="auth-modal" class="auth-modal-overlay" aria-hidden="true" role="dialog" aria-labelledby="auth-modal-title">
+    <div class="auth-modal-backdrop" onclick="closeAuthModal()"></div>
+    <div class="auth-modal-card auth-double-card" id="auth-double-card">
+      <button class="auth-modal-close" onclick="closeAuthModal()" aria-label="Close dialog">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+
+      <!-- LEFT SIDE: WHITE FORM PANEL -->
+      <div class="auth-form-panel">
+        <!-- Error / Info Alert Box -->
+        <div id="auth-error-box" class="auth-alert" style="display:none">
+          <span class="material-symbols-outlined auth-alert-icon">info</span>
+          <span id="auth-error-text"></span>
+        </div>
+
+        <!-- ================= LOGIN TAB VIEW ================= -->
+        <div id="view-login" class="auth-view-content">
+          <h2 class="auth-heading" id="auth-modal-title">Sign in</h2>
+
+          <!-- Google 1-Click OAuth Sign-In -->
+          <button type="button" class="btn-google-auth" onclick="triggerGoogleAuth()" title="Sign in with your Google Account">
+            <svg viewBox="0 0 24 24" width="18" height="18" style="flex-shrink:0">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Sign in with Google</span>
+          </button>
+
+          <!-- Social Icons row -->
+          <div class="auth-social-row">
+            <button type="button" class="auth-social-btn" onclick="triggerGoogleAuth()" aria-label="Sign in with Google" title="Google OAuth">
+              <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+            </button>
+            <a href="javascript:void(0)" class="auth-social-btn" onclick="showAuthAlert('Demo IAM: Click alex.chen or use Google Sign-In above', true)" aria-label="Enterprise IAM">IAM</a>
+            <a href="javascript:void(0)" class="auth-social-btn" onclick="showAuthAlert('Demo SSO: Configured with Google OAuth 2.0', true)" aria-label="SSO">SSO</a>
+          </div>
+
+          <p class="auth-subtext">or use your corporate account</p>
+
+          <form id="login-form" onsubmit="handleLoginSubmit(event)" novalidate>
+            <div class="auth-field-simple">
+              <input type="text" id="login-userid" class="auth-flat-input" placeholder="Email or User ID" required autocomplete="username"/>
+            </div>
+
+            <div class="auth-field-simple auth-pwd-wrap">
+              <input type="password" id="login-password" class="auth-flat-input" placeholder="Password" required autocomplete="current-password"/>
+              <button type="button" class="auth-pwd-toggle-flat" onclick="togglePasswordVisibility('login-password', this)" aria-label="Toggle password visibility">
+                <span class="material-symbols-outlined" style="font-size:16px">visibility</span>
+              </button>
+            </div>
+
+            <div class="auth-forgot-row">
+              <a href="javascript:void(0)" class="auth-forgot-link" onclick="handleForgotPassword()">Forgot your password?</a>
+            </div>
+
+            <button type="submit" id="btn-login-submit" class="btn-primary-pill">
+              SIGN IN
+            </button>
+
+            <!-- 1-Click Fast Fill for Demo Testing -->
+            <div class="auth-demo-chips">
+              <span class="auth-demo-tag">1-Click Test:</span>
+              <button type="button" class="demo-chip-btn" onclick="prefillDemoUser('alex.chen')">alex.chen</button>
+              <button type="button" class="demo-chip-btn" onclick="prefillDemoUser('elena.rostova')">elena.rostova</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ================= REGISTER TAB VIEW ================= -->
+        <div id="view-register" class="auth-view-content" style="display:none">
+          <!-- STEP 1: Enter Name, Email/Phone, Password -->
+          <div id="reg-step-1">
+            <h2 class="auth-heading">Create Account</h2>
+
+            <!-- Google 1-Click OAuth Registration -->
+            <button type="button" class="btn-google-auth" onclick="triggerGoogleAuth()" title="Register with your Google Account">
+              <svg viewBox="0 0 24 24" width="18" height="18" style="flex-shrink:0">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              <span>Sign up with Google</span>
+            </button>
+
+            <!-- Social Icons row -->
+            <div class="auth-social-row">
+              <button type="button" class="auth-social-btn" onclick="triggerGoogleAuth()" aria-label="Sign up with Google" title="Google OAuth">
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+              </button>
+              <a href="javascript:void(0)" class="auth-social-btn" onclick="showAuthAlert('Demo IAM: Fill form or use Google Sign-Up', true)" aria-label="Enterprise IAM">IAM</a>
+              <a href="javascript:void(0)" class="auth-social-btn" onclick="showAuthAlert('Demo SSO: Enabled via Google OAuth 2.0', true)" aria-label="SSO">SSO</a>
+            </div>
+
+            <p class="auth-subtext">or use your email or phone for registration</p>
+
+            <form id="reg-step1-form" onsubmit="handleRequestRegisterOTP(event)" novalidate>
+              <div class="auth-field-simple">
+                <input type="text" id="reg-name" class="auth-flat-input" placeholder="Name" required autocomplete="name"/>
+              </div>
+
+              <!-- Contact with Email / Phone switcher -->
+              <div class="auth-field-simple">
+                <div class="contact-pill-selector">
+                  <button type="button" class="contact-pill-btn active" id="pill-email" onclick="setContactType('email')">Email</button>
+                  <button type="button" class="contact-pill-btn" id="pill-phone" onclick="setContactType('phone')">Phone</button>
+                </div>
+                <input type="text" id="reg-contact" class="auth-flat-input" placeholder="Email address" required/>
+              </div>
+
+              <div class="auth-field-simple auth-pwd-wrap">
+                <input type="password" id="reg-password" class="auth-flat-input" placeholder="Password (min 6 chars)" required autocomplete="new-password"/>
+                <button type="button" class="auth-pwd-toggle-flat" onclick="togglePasswordVisibility('reg-password', this)" aria-label="Toggle password visibility">
+                  <span class="material-symbols-outlined" style="font-size:16px">visibility</span>
+                </button>
+              </div>
+
+              <input type="hidden" id="reg-role" value="Senior Platform Engineer"/>
+
+              <button type="submit" id="btn-request-otp" class="btn-primary-pill">
+                SIGN UP
+              </button>
+            </form>
+          </div>
+
+          <!-- STEP 2: OTP Verification -->
+          <div id="reg-step-2" style="display:none">
+            <h2 class="auth-heading" style="font-size:22px">Verify OTP</h2>
+            <div class="otp-mobile-notice" id="otp-mobile-notice">
+              <span class="material-symbols-outlined" id="otp-notice-icon" style="font-size:18px;color:#aa8453">sms</span>
+              <span id="otp-notice-text">Verification code sent via SMS to your mobile phone. Check your messages.</span>
+            </div>
+
+            <!-- 6 OTP Boxes -->
+            <div class="otp-boxes-flat" id="otp-boxes-container">
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-1" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 1)" onkeydown="handleOtpKey(event, 1)"/>
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-2" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 2)" onkeydown="handleOtpKey(event, 2)"/>
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-3" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 3)" onkeydown="handleOtpKey(event, 3)"/>
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-4" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 4)" onkeydown="handleOtpKey(event, 4)"/>
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-5" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 5)" onkeydown="handleOtpKey(event, 5)"/>
+              <input type="text" maxlength="1" class="otp-box-input" id="otp-6" inputmode="numeric" pattern="[0-9]*" oninput="handleOtpInput(this, 6)" onkeydown="handleOtpKey(event, 6)"/>
+            </div>
+
+            <div class="otp-resend-flat">
+              <span id="otp-timer-label">Resend code in <strong id="otp-countdown" style="color:#aa8453">30s</strong></span>
+              <button type="button" id="btn-resend-otp" class="btn-resend-flat" style="display:none" onclick="resendRegisterOTP()">
+                Resend OTP
+              </button>
+            </div>
+
+            <button type="button" id="btn-verify-otp" class="btn-primary-pill" onclick="verifyRegisterOTP()" style="margin-top:10px">
+              VERIFY & REGISTER
+            </button>
+
+            <button type="button" class="btn-back-flat" onclick="backToRegisterStep1()">
+              Change Email / Phone
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDE: VIBRANT RED / PINK GRADIENT PANEL (Matches signup.jpg) -->
+      <div class="auth-overlay-panel">
+        <!-- Displayed in Sign In mode -->
+        <div id="overlay-login-content" class="auth-overlay-content">
+          <h2 class="auth-overlay-title">Hello, Friend!</h2>
+          <p class="auth-overlay-desc">Enter your personal details and start journey with us</p>
+          <button type="button" class="btn-ghost-pill" onclick="switchAuthTab('register')">
+            SIGN UP
+          </button>
+        </div>
+
+        <!-- Displayed in Sign Up mode -->
+        <div id="overlay-register-content" class="auth-overlay-content" style="display:none">
+          <h2 class="auth-overlay-title">Welcome Back!</h2>
+          <p class="auth-overlay-desc">To keep connected with us please login with your personal info</p>
+          <button type="button" class="btn-ghost-pill" onclick="switchAuthTab('login')">
+            SIGN IN
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

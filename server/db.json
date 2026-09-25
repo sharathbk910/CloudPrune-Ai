@@ -1,0 +1,173 @@
+{
+  "instances": [
+    {
+      "id": "i-0a8f9c1e3d7b2a450",
+      "name": "API Gateway Cluster",
+      "type": "",
+      "cpuUtilization": 78.4,
+      "memoryUtilization": 82.1,
+      "monthlyCost": 248.2,
+      "tags": [
+        "production",
+        "api",
+        "critical"
+      ],
+      "status": "running",
+      "lastActive": "2 minutes ago",
+      "region": ""
+    },
+    {
+      "id": "i-0e1b2c3d4f5a67890",
+      "name": "QA Load Test Runner",
+      "type": "c5.4xlarge",
+      "cpuUtilization": 1.2,
+      "memoryUtilization": 4.8,
+      "monthlyCost": 496.4,
+      "tags": [
+        "qa",
+        "load-test",
+        "temporary"
+      ],
+      "status": "running",
+      "lastActive": "23 days ago",
+      "region": "us-west-2"
+    },
+    {
+      "id": "i-09f8e7d6c5b4a3211",
+      "name": "Feature Branch PR-142",
+      "type": "t3.large",
+      "cpuUtilization": 0.8,
+      "memoryUtilization": 9.3,
+      "monthlyCost": 60.74,
+      "tags": [
+        "dev",
+        "feature-branch",
+        "abandoned"
+      ],
+      "status": "running",
+      "lastActive": "18 days ago",
+      "region": ""
+    },
+    {
+      "id": "i-03c4d5e6f7a8b9012",
+      "name": "Payment Processing Service",
+      "type": "m5.xlarge",
+      "cpuUtilization": 64.9,
+      "memoryUtilization": 71,
+      "monthlyCost": 140.16,
+      "tags": [
+        "production",
+        "payments",
+        "pci-dss"
+      ],
+      "status": "running",
+      "lastActive": "Just now",
+      "region": ""
+    },
+    {
+      "id": "i-07d8e9f0a1b2c3456",
+      "name": "Analytics Data Sandbox",
+      "type": "r5.2xlarge",
+      "cpuUtilization": 2.1,
+      "memoryUtilization": 6.4,
+      "monthlyCost": 367.92,
+      "tags": [
+        "sandbox",
+        "data",
+        "zombie-candidate"
+      ],
+      "status": "running",
+      "lastActive": "31 days ago",
+      "region": "eu-central-1"
+    },
+    {
+      "id": "i-02b3c4d5e6f7a8901",
+      "name": "Staging Frontend Web",
+      "type": "t3.medium",
+      "cpuUtilization": 22.4,
+      "memoryUtilization": 41.5,
+      "monthlyCost": 30.37,
+      "tags": [
+        "staging",
+        "frontend"
+      ],
+      "status": "running",
+      "lastActive": "4 hours ago",
+      "region": ""
+    },
+    {
+      "id": "i-0b5c6d7e8f9a01234",
+      "name": "ML Model Training Evaluator",
+      "type": "g4dn.xlarge",
+      "cpuUtilization": 0.4,
+      "memoryUtilization": 3.2,
+      "monthlyCost": 383.98,
+      "tags": [
+        "ml",
+        "gpu",
+        "idle-eval"
+      ],
+      "status": "running",
+      "lastActive": "42 days ago",
+      "region": "us-west-2"
+    },
+    {
+      "id": "i-0f6a7b8c9d0e12345",
+      "name": "Redis Cache Primary",
+      "type": "r5.large",
+      "cpuUtilization": 52.3,
+      "memoryUtilization": 88,
+      "monthlyCost": 91.98,
+      "tags": [
+        "production",
+        "cache",
+        "ha"
+      ],
+      "status": "running",
+      "lastActive": "1 minute ago",
+      "region": ""
+    },
+    {
+      "id": "i-0c7d8e9f0a1b23456",
+      "name": "Client POC Demo Sandbox",
+      "type": "t3.xlarge",
+      "cpuUtilization": 1.6,
+      "memoryUtilization": 7.1,
+      "monthlyCost": 121.47,
+      "tags": [
+        "demo",
+        "sales-poc",
+        "expired"
+      ],
+      "status": "running",
+      "lastActive": "28 days ago",
+      "region": "us-east-2"
+    },
+    {
+      "id": "i-0d8e9f0a1b2c34567",
+      "name": "Background Worker Queue",
+      "type": "c5.xlarge",
+      "cpuUtilization": 83.1,
+      "memoryUtilization": 69.4,
+      "monthlyCost": 124.1,
+      "tags": [
+        "production",
+        "workers",
+        "sqs"
+      ],
+      "status": "running",
+      "lastActive": "Just now",
+      "region": ""
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log-init",
+      "timestamp": "2026-09-25T10:24:31.483Z",
+      "action": "INITIAL_TELEMETRY_SYNC",
+      "details": "Ingested initial live cloud telemetry across 10 EC2 instances."
+    }
+  ],
+  "totalSavingsRealized": 0,
+  "updatedAt": "2026-09-25T11:24:31.484Z"
+}
