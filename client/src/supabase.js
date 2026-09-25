@@ -1,10 +1,11 @@
+﻿import { createClient } from '@supabase/supabase-js';
+
 /**
  * Supabase Client & Configuration Helper
  * Reads configuration from Vite environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
  */
-
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'REDACTED_SUPABASE_URL';
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'REDACTED_SUPABASE_ANON_KEY';
 
 export const isSupabaseConfigured = Boolean(
   SUPABASE_URL && 
@@ -12,14 +13,41 @@ export const isSupabaseConfigured = Boolean(
   !SUPABASE_URL.includes('your-project')
 );
 
+export const supabase = isSupabaseConfigured
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
 /**
- * If you install @supabase/supabase-js:
- *   npm install @supabase/supabase-js
- * 
- * You can initialize the client like this:
- * 
- * import { createClient } from '@supabase/supabase-js';
- * export const supabase = isSupabaseConfigured
- *   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
- *   : null;
+ * Initiates native Google OAuth 2.0 via Supabase with prompt: 'select_account'
+ * Ensures Google's official account picker opens for the visitor's device.
  */
+export async function signInWithGoogle() {
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      queryParams: {
+        prompt: 'select_account'
+      },
+      redirectTo: window.location.origin + window.location.pathname
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Sign out helper
+ */
+export async function signOut() {
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
+}

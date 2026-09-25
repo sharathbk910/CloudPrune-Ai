@@ -1275,7 +1275,7 @@ window.handleGoogleAuthResponse = async function(response) {
     let profile = decodeJwtPayload(response.credential);
 
     // If credential was an OAuth2 access token, fetch Google userinfo directly (CORS-enabled public endpoint)
-    if (!profile || !profile.email) {
+    if (!profile || (!profile.email && !profile.user_metadata?.email)) {
       try {
         const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
           headers: { Authorization: `Bearer ${response.credential}` }
@@ -1288,20 +1288,20 @@ window.handleGoogleAuthResponse = async function(response) {
       }
     }
 
-    if (profile && (profile.email || profile.sub)) {
-      const email = (profile.email || `google-user-${profile.sub || Date.now()}@gmail.com`).toLowerCase();
-      const name = profile.name || email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    if (profile && (profile.email || profile.user_metadata?.email || profile.sub)) {
+      const email = (profile.email || profile.user_metadata?.email || `google-user-${profile.sub || Date.now()}@domain.com`).toLowerCase();
+      const name = profile.name || profile.user_metadata?.full_name || profile.user_metadata?.name || email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
       const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
 
       authenticatedUser = {
-        id: `usr-g-${profile.sub || Date.now()}`,
+        id: `usr-g-${profile.sub || profile.id || Date.now()}`,
         name,
         email,
         role: "Senior Platform Engineer",
         avatar: initials || "GU",
-        picture: profile.picture || null,
+        picture: profile.picture || profile.user_metadata?.avatar_url || null,
         provider: "google",
-        googleSub: profile.sub
+        googleSub: profile.sub || profile.id
       };
     }
   }
@@ -1324,110 +1324,128 @@ window.handleGoogleAuthResponse = async function(response) {
 };
 
 // ============================================
-// GOOGLE ACCOUNT CHOOSER & AUTH CONTROLLER
+// GOOGLE OAUTH 2.0 & IDENTITY SERVICES (GIS)
 // ============================================
-window.triggerGoogleAuth = function() {
-  hideAuthAlert();
-  openGoogleChooser();
-};
+const SUPABASE_AUTH_URL = "REDACTED_SUPABASE_URL";
+const SUPABASE_AUTH_ANON_KEY = "REDACTED_SUPABASE_ANON_KEY";
+let supabaseClient = null;
 
-window.openGoogleChooser = function() {
-  const modal = document.getElementById("google-chooser-modal");
-  if (modal) {
-    modal.style.display = "flex";
-  } else {
-    // Direct instant login fallback
-    selectGoogleAccount("sharathbk910@gmail.com", "Sharath B K");
-  }
-};
-
-window.closeGoogleChooser = function() {
-  const modal = document.getElementById("google-chooser-modal");
-  if (modal) modal.style.display = "none";
-};
-
-window.selectGoogleAccount = async function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
-  closeGoogleChooser();
-  showAuthAlert(`Signing in with Google (${email})...`, true);
-
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
-  const googleProfile = {
-    email,
-    name,
-    picture: null,
-    sub: `google-${Date.now()}`
-  };
-
-  let authenticatedUser = null;
-  let authToken = null;
-
-  // 1. Sync with backend API
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`${API_BASE}/api/auth/google`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ googleProfile }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.user) {
-        authenticatedUser = data.user;
-        authToken = data.token;
-      }
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+  if (window.supabase && typeof window.supabase.createClient === "function") {
+    try {
+      supabaseClient = window.supabase.createClient(SUPABASE_AUTH_URL, SUPABASE_AUTH_ANON_KEY);
+      return supabaseClient;
+    } catch (err) {
+      console.warn("Failed to create Supabase client:", err);
     }
-  } catch (err) {
-    console.warn("Backend API sync failed, continuing with client Google auth:", err);
   }
+  return null;
+}
 
-  // 2. Client-side user provisioning fallback
-  if (!authenticatedUser) {
-    authenticatedUser = {
-      id: `usr-g-${Date.now()}`,
-      name,
-      email,
-      role: "Senior Platform Engineer",
-      avatar: initials || "SB",
-      provider: "google"
-    };
+let gisTokenClient = null;
+
+function getGoogleTokenClient() {
+  if (gisTokenClient) return gisTokenClient;
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+    try {
+      gisTokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: "openid email profile",
+        prompt: "select_account",
+        callback: async (tokenResponse) => {
+          if (tokenResponse && (tokenResponse.access_token || tokenResponse.id_token)) {
+            await window.handleGoogleAuthResponse({
+              credential: tokenResponse.access_token || tokenResponse.id_token
+            });
+          } else if (tokenResponse && tokenResponse.error) {
+            console.warn("Google OAuth Token error:", tokenResponse.error);
+            if (tokenResponse.error !== "popup_closed_by_user") {
+              showAuthAlert(`Google sign-in was not completed: ${tokenResponse.error}`);
+            }
+          }
+        },
+        error_callback: (err) => {
+          console.warn("GIS tokenClient error, launching standard OAuth redirect:", err);
+          launchGoogleOAuthRedirect();
+        }
+      });
+      return gisTokenClient;
+    } catch (e) {
+      console.warn("Could not initialize GIS token client:", e);
+    }
   }
+  return null;
+}
 
-  state.currentUser = authenticatedUser;
-  try {
-    localStorage.setItem("cloudprune_user", JSON.stringify(authenticatedUser));
-    if (authToken) localStorage.setItem("cloudprune_token", authToken);
-  } catch (_) {}
-
-  renderAuthState();
-  closeAuthModal();
-  showToast(`Welcome, ${name}! Authenticated via Google (${email}).`);
-};
-
-window.promptCustomGoogleAccount = function() {
-  const email = prompt("Enter your Google email address to continue:", "sharathbk910@gmail.com");
-  if (!email || !email.includes("@")) return;
-  const name = email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  selectGoogleAccount(email.trim().toLowerCase(), name);
-};
-
-window.quickGoogleLogin = function(email = "sharathbk910@gmail.com", name = "Sharath B K") {
-  selectGoogleAccount(email, name);
-};
-
+/**
+ * Standard Google OAuth 2.0 full-page redirect with prompt=select_account
+ * Redirects directly to accounts.google.com/o/oauth2/v2/auth
+ */
 function launchGoogleOAuthRedirect() {
   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.trim() === "") {
-    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for instant login.", false);
+    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for demo testing.", false);
     return;
   }
+  showAuthAlert("Redirecting to Google Sign-In...", true);
   const redirectUri = window.location.origin + (window.location.pathname === '/' ? '' : window.location.pathname);
-  const scope = "email profile openid";
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token%20id_token&scope=${encodeURIComponent(scope)}&nonce=${Date.now()}`;
+  const scope = "openid email profile";
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=token%20id_token` +
+    `&scope=${encodeURIComponent(scope)}` +
+    `&prompt=select_account` +
+    `&nonce=${Date.now()}`;
   window.location.href = authUrl;
 }
+
+/**
+ * Native Google Sign In trigger:
+ * 1. Checks Supabase OAuth with prompt: 'select_account'
+ * 2. Falls back to Google Identity Services (GIS) Token Client with prompt: 'select_account'
+ * 3. Falls back to standard Google OAuth 2.0 redirect with prompt: 'select_account'
+ * Guarantees Google's native account picker opens showing only the visitor's device accounts.
+ */
+window.triggerGoogleAuth = async function() {
+  hideAuthAlert();
+  showAuthAlert("Opening Google Sign-In...", true);
+
+  // 1. Supabase OAuth (select_account)
+  const sb = getSupabaseClient();
+  if (sb && sb.auth) {
+    try {
+      const redirectUri = window.location.origin + (window.location.pathname === '/' ? '' : window.location.pathname);
+      const { error } = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            prompt: 'select_account'
+          },
+          redirectTo: redirectUri
+        }
+      });
+      if (!error) return;
+      console.warn("Supabase Google OAuth initiation error:", error);
+    } catch (sbErr) {
+      console.warn("Supabase OAuth error, falling back to GIS / OAuth redirect:", sbErr);
+    }
+  }
+
+  // 2. Google Identity Services (GIS) Token Client (popup with select_account)
+  const client = getGoogleTokenClient();
+  if (client) {
+    try {
+      client.requestAccessToken({ prompt: "select_account" });
+      return;
+    } catch (gisErr) {
+      console.warn("GIS requestAccessToken error, falling back to redirect:", gisErr);
+    }
+  }
+
+  // 3. Standard Google OAuth 2.0 Redirect (select_account)
+  launchGoogleOAuthRedirect();
+};
 
 // Check OAuth URL Hash parameters on return redirect
 function checkOAuthRedirectHash() {
@@ -1436,10 +1454,17 @@ function checkOAuthRedirectHash() {
   const params = new URLSearchParams(hash);
   const idToken = params.get("id_token");
   const accessToken = params.get("access_token");
+  const providerToken = params.get("provider_token");
 
-  if (idToken || accessToken) {
+  if (params.get("error")) {
+    showAuthAlert(`Authentication failed: ${params.get("error_description") || params.get("error")}`);
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    window.handleGoogleAuthResponse({ credential: idToken || accessToken });
+    return;
+  }
+
+  if (idToken || accessToken || providerToken) {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    window.handleGoogleAuthResponse({ credential: idToken || providerToken || accessToken });
   }
 }
 
