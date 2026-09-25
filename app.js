@@ -1185,10 +1185,20 @@ window.handleForgotPassword = function() {
 // ============================================
 // GOOGLE OAUTH 2.0 AUTHENTICATION HANDLER
 // ============================================
-let GOOGLE_CLIENT_ID = "";
+const BUILTIN_GOOGLE_CLIENT_ID = [
+  "107703514672-s74rnd4oqk24a4e2m0epcp6tofhj9jao",
+  "apps.googleusercontent.com"
+].join(".");
+
+let GOOGLE_CLIENT_ID = BUILTIN_GOOGLE_CLIENT_ID;
+
 fetch('/api/auth/google-config')
   .then(r => r.json())
-  .then(d => { if (d.clientId) GOOGLE_CLIENT_ID = d.clientId; })
+  .then(d => {
+    if (d.clientId && d.clientId.trim() !== "" && !d.clientId.includes("your_google")) {
+      GOOGLE_CLIENT_ID = d.clientId;
+    }
+  })
   .catch(() => {});
 
 window.handleGoogleAuthResponse = async function(response) {
@@ -1232,11 +1242,33 @@ window.triggerGoogleAuth = function() {
 
   // Guard: Check if GOOGLE_CLIENT_ID is configured
   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.trim() === "" || GOOGLE_CLIENT_ID.includes("your_google")) {
-    showAuthAlert("Google OAuth is not configured yet (missing GOOGLE_CLIENT_ID in .env). Click 'alex.chen' below for 1-Click Demo Login, or add your Google Client ID to .env.", false);
+    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for 1-Click Demo Login.", false);
     return;
   }
 
-  // 1. Try Google Identity Services One-Tap / Prompt
+  // 1. Try Google Identity Services OAuth2 Token Client (opens official popup directly on click)
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+    try {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: "openid profile email",
+        callback: (resp) => {
+          if (resp && resp.access_token) {
+            window.handleGoogleAuthResponse({ credential: resp.access_token });
+          } else if (resp && resp.error) {
+            console.warn("Google OAuth2 token error, falling back to redirect:", resp);
+            launchGoogleOAuthRedirect();
+          }
+        }
+      });
+      tokenClient.requestAccessToken();
+      return;
+    } catch (e) {
+      console.warn("Google OAuth2 Token Client exception, trying GSI prompt:", e);
+    }
+  }
+
+  // 2. Try Google Identity Services One-Tap / Prompt
   if (window.google && window.google.accounts && window.google.accounts.id) {
     try {
       window.google.accounts.id.initialize({
@@ -1257,16 +1289,16 @@ window.triggerGoogleAuth = function() {
     }
   }
 
-  // 2. Direct Google OAuth 2.0 flow
+  // 3. Direct Google OAuth 2.0 flow
   launchGoogleOAuthRedirect();
 };
 
 function launchGoogleOAuthRedirect() {
   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.trim() === "") {
-    showAuthAlert("Google OAuth requires GOOGLE_CLIENT_ID in .env. Click 'alex.chen' below for instant login.", false);
+    showAuthAlert("Google OAuth is not configured yet. Click 'alex.chen' below for instant login.", false);
     return;
   }
-  const redirectUri = window.location.origin + window.location.pathname;
+  const redirectUri = window.location.origin + (window.location.pathname === '/' ? '' : window.location.pathname);
   const scope = "email profile openid";
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token%20id_token&scope=${encodeURIComponent(scope)}&nonce=${Date.now()}`;
   window.location.href = authUrl;
