@@ -156,8 +156,16 @@ function authenticateToken(req, res, next) {
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend assets from client or root
-app.use(express.static(path.join(__dirname, "..")));
+// Serve static frontend assets from client or root (no-cache in dev to prevent stale script caching)
+app.use(express.static(path.join(__dirname, ".."), {
+  etag: false,
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+  }
+}));
 
 /**
  * Health check & status
@@ -846,6 +854,7 @@ if (fs.existsSync(clientDistPath)) {
 
 // Root entry point
 app.get("/", (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.sendFile(path.join(__dirname, "..", "index.html"));
 });
 

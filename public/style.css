@@ -3286,36 +3286,10 @@ input {
   letter-spacing: -0.01em;
 }
 
-/* Social Row (f, G+, in) */
-.auth-social-row {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin: 8px 0 12px 0;
-}
-
+/* Social Row (IAM & SSO removed, Google only) */
+.auth-social-row,
 .auth-social-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid #dddddd;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #333333;
-  font-size: 13.5px;
-  font-weight: 600;
-  text-decoration: none;
-  background: #ffffff;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.auth-social-btn:hover {
-  border-color: #aa8453;
-  color: #aa8453;
-  background: rgba(170, 132, 83, 0.08);
-  transform: translateY(-1px);
+  display: none !important;
 }
 
 /* Full-width Google Sign-In button */
