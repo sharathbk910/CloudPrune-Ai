@@ -4,6 +4,7 @@
   "description": "Autonomous FinOps Agent that identifies idle cloud resources and enables human-in-the-loop termination",
   "main": "server.js",
   "scripts": {
+    "build": "node build-prep.js",
     "start": "node server.js",
     "server": "node server/server.js",
     "dev": "node server.js",
