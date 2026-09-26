@@ -1,4 +1,4 @@
-const path = require("path");
+﻿const path = require("path");
 const fs = require("fs");
 
 // Load backend .env and root .env fallback
@@ -20,56 +20,135 @@ const { runGeminiFinOpsAudit } = require("./gemini");
 const { TerminateRequestSchema } = require("./schemas");
 
 // ============================================
-// EMAIL TRANSPORTER (Nodemailer / Gmail SMTP)
+// EMAIL TRANSPORTER (Nodemailer / SMTP / Gmail)
 // ============================================
 function createEmailTransporter() {
+  // 1. Custom SMTP Server (SendGrid SMTP, AWS SES, Brevo, Mailgun, Postmark, etc.)
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    const port = parseInt(process.env.SMTP_PORT || "587", 10);
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      secure: process.env.SMTP_SECURE === "true" || port === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+  }
+
+  // 2. Gmail SMTP Service with App Password
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS;
-  if (!user || !pass || user.includes("your_gmail") || pass.includes("your_16")) {
-    return null; // Not configured — fallback to console logging
+  if (user && pass && !user.includes("your_gmail") && !pass.includes("your_16")) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: { user, pass }
+    });
   }
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass }
-  });
+
+  return null; // Not configured â€” fallback to console logging
 }
 
 async function sendOtpEmail(toEmail, code, fromName) {
+  // 1. If Resend API Key is set, deliver via Resend HTTP API
+  if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes("your_")) {
+    try {
+      const fromAddr = process.env.EMAIL_FROM || "CloudPrune AI <onboarding@resend.dev>";
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: fromAddr,
+          to: [toEmail],
+          subject: `${code} â€” Your CloudPrune AI Verification Code`,
+          html: generateOtpHtmlEmail(code)
+        })
+      });
+      if (res.ok) {
+        console.log(`âœ… [EMAIL] OTP sent via Resend API to ${toEmail}`);
+        return true;
+      }
+    } catch (rErr) {
+      console.warn("Resend API delivery error, falling back to Nodemailer:", rErr.message);
+    }
+  }
+
+  // 2. Deliver via Nodemailer (Gmail or Custom SMTP)
   const transporter = createEmailTransporter();
   if (!transporter) {
-    console.warn("[EMAIL] Nodemailer not configured — OTP only logged to console.");
+    console.warn(`[EMAIL] Email transporter not configured in server/.env â€” OTP logged below.`);
     return false;
   }
-  const from = `"${fromName || "CloudPrune AI"}" <${process.env.EMAIL_USER}>`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#0B0F19;color:#e5e7eb;border-radius:12px;overflow:hidden">
-      <div style="background:linear-gradient(135deg,#10b981,#6366f1);padding:28px 32px">
-        <h1 style="margin:0;font-size:22px;color:#fff;letter-spacing:-0.5px">CloudPrune<span style="font-weight:400">.AI</span></h1>
-        <p style="margin:6px 0 0;font-size:13px;color:#d1fae5;opacity:.85">Autonomous FinOps Agent</p>
-      </div>
-      <div style="padding:32px">
-        <h2 style="margin:0 0 8px;font-size:18px;color:#f9fafb">Your Verification Code</h2>
-        <p style="margin:0 0 24px;font-size:14px;color:#9ca3af">Use this 6-digit code to verify your identity. It expires in <strong style="color:#34d399">10 minutes</strong>.</p>
-        <div style="background:#111827;border:1px solid #374151;border-radius:10px;padding:20px;text-align:center;letter-spacing:10px;font-size:36px;font-weight:700;color:#34d399;font-family:monospace">${code}</div>
-        <p style="margin:24px 0 0;font-size:12px;color:#6b7280">If you did not request this code, you can safely ignore this email. Never share this code with anyone.</p>
-      </div>
-      <div style="padding:16px 32px;background:#0a0e17;border-top:1px solid #1f2937;font-size:11px;color:#4b5563;text-align:center">
-        &copy; ${new Date().getFullYear()} CloudPrune AI &mdash; Sent automatically, do not reply.
-      </div>
-    </div>
-  `;
+
+  const senderUser = process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.SMTP_USER || "noreply@cloudprune.ai";
+  const from = `"${fromName || "CloudPrune AI"}" <${senderUser}>`;
+  const html = generateOtpHtmlEmail(code);
+
   await transporter.sendMail({
     from,
     to: toEmail,
-    subject: `${code} — Your CloudPrune AI Verification Code`,
+    subject: `${code} is your CloudPrune AI verification code`,
     html
   });
   return true;
 }
 
+function generateOtpHtmlEmail(code) {
+  return `
+    <div style="font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;background:#0B0F19;color:#e5e7eb;border-radius:16px;overflow:hidden;border:1px solid #1f2937;box-shadow:0 20px 40px rgba(0,0,0,0.5)">
+      <div style="background:linear-gradient(135deg,#c5a880 0%,#aa8453 100%);padding:32px 36px;text-align:center">
+        <h1 style="margin:0;font-size:24px;color:#141210;font-weight:800;letter-spacing:-0.5px">CloudPrune<span style="font-weight:400">.AI</span></h1>
+        <p style="margin:6px 0 0;font-size:13px;color:#2e2418;font-weight:600">Autonomous FinOps Agent & Cloud Cost Optimizer</p>
+      </div>
+      <div style="padding:36px">
+        <h2 style="margin:0 0 10px;font-size:20px;color:#ffffff;font-weight:700">Your Verification Code</h2>
+        <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.5">
+          Enter this 6-digit one-time password (OTP) to securely access your CloudPrune FinOps console. This code is single-use and will expire in <strong style="color:#c5a880">10 minutes</strong>.
+        </p>
+        <div style="background:#111827;border:1.5px solid #aa8453;border-radius:12px;padding:22px;text-align:center;letter-spacing:14px;font-size:38px;font-weight:800;color:#c5a880;font-family:'JetBrains Mono',Menlo,Monaco,Consolas,monospace;box-shadow:inset 0 2px 10px rgba(0,0,0,0.4)">
+          ${code}
+        </div>
+        <p style="margin:26px 0 0;font-size:12px;color:#6b7280;line-height:1.5">
+          ðŸ›¡ï¸ If you did not request this login code, you can safely ignore this email. Never share this code with anyone. CloudPrune engineers will never ask for your verification code.
+        </p>
+      </div>
+      <div style="padding:18px 36px;background:#070a10;border-top:1px solid #172033;font-size:11px;color:#4b5563;text-align:center">
+        &copy; ${new Date().getFullYear()} CloudPrune AI Inc. &mdash; Enterprise FinOps Security. Sent automatically, do not reply.
+      </div>
+    </div>
+  `;
+}
+
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "cloudprune-enterprise-jwt-secret-key-2026";
+
+// Serverless route normalizer for Vercel deployment
+app.use((req, res, next) => {
+  // 1. If Vercel rewrote to /api/index.js, restore from header or strip
+  if (req.url.startsWith("/api/index.js")) {
+    const original = req.headers["x-matched-path"] || req.headers["x-now-route-matches"] || "";
+    if (original && original.startsWith("/api")) {
+      req.url = original;
+    } else {
+      req.url = req.url.replace(/^\/api\/index\.js/, "/api");
+    }
+  }
+  // 2. If Vercel stripped the /api prefix, prepend it for known API routes
+  if (!req.url.startsWith("/api") && !req.url.startsWith("/app") && !req.url.startsWith("/console") && !req.url.startsWith("/assets") && req.url !== "/" && req.url !== "/index.html") {
+    const candidate = `/api${req.url}`;
+    const knownApiPrefixes = ["/api/health", "/api/auth", "/api/instances", "/api/metrics", "/api/audit", "/api/chat", "/api/terminate"];
+    if (knownApiPrefixes.some(p => candidate.startsWith(p))) {
+      req.url = candidate;
+    }
+  }
+  next();
+});
 
 // ============================================
 // CRYPTOGRAPHIC JWT IMPLEMENTATION (HMAC-SHA256)
@@ -181,26 +260,9 @@ app.get("/api/health", (req, res) => {
   });
 });
 /**
- * In-Memory Enterprise IAM Auth Users Store
+ * Dynamic In-Memory Enterprise IAM Auth Users Store (starts clean, populated on verified OTP login)
  */
-const AUTH_USERS = [
-  {
-    id: "usr-001",
-    name: "Alex Chen",
-    email: "alex.chen@enterprise.io",
-    password: "finops2026",
-    role: "Senior Platform Engineer",
-    avatar: "AC"
-  },
-  {
-    id: "usr-002",
-    name: "Elena Rostova",
-    email: "elena.rostova@enterprise.io",
-    password: "finops2026",
-    role: "SecOps Lead",
-    avatar: "ER"
-  }
-];
+const AUTH_USERS = [];
 
 // Default public OAuth Client ID fallback (split to prevent static regex false positives in Git push protection)
 const DEFAULT_GOOGLE_CLIENT_ID = [
@@ -218,6 +280,154 @@ app.get("/api/auth/google-config", (req, res) => {
     clientId: activeClientId,
     configured: Boolean(activeClientId)
   });
+});
+
+function getGoogleCallbackUrl(req) {
+  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const host = req.headers["x-forwarded-host"] || req.get("host");
+  return `${proto}://${host}/api/auth/google/callback`;
+}
+
+/**
+ * GET /api/auth/google/login
+ * Initiates native Google OAuth 2.0 authorization code flow
+ * Uses pre-authorized callback URL
+ */
+app.get("/api/auth/google/login", (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.status(500).send("Google OAuth Client ID is not configured.");
+  }
+  const returnTo = req.query.returnTo || req.get("referer") || "/";
+  const callbackUrl = getGoogleCallbackUrl(req);
+  const scope = "openid email profile";
+  const state = Buffer.from(JSON.stringify({ returnTo })).toString("base64");
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(callbackUrl)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent(scope)}` +
+    `&prompt=select_account` +
+    `&state=${encodeURIComponent(state)}`;
+
+  res.redirect(authUrl);
+});
+
+/**
+ * GET /api/auth/google/callback
+ * Handles Google OAuth redirect, exchanges code for tokens, provisions IAM user, and redirects with session
+ */
+app.get("/api/auth/google/callback", async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+
+  let returnTo = "/";
+  try {
+    if (state) {
+      const parsed = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
+      if (parsed.returnTo) returnTo = parsed.returnTo;
+    }
+  } catch (_) {}
+
+  const safeReturnUrl = (hashFragment) => {
+    try {
+      const u = new URL(returnTo, `${req.protocol}://${req.get("host")}`);
+      u.hash = hashFragment;
+      return u.toString();
+    } catch (_) {
+      return `${returnTo}#${hashFragment}`;
+    }
+  };
+
+  if (error) {
+    console.error("Google OAuth error response:", error, error_description);
+    return res.redirect(safeReturnUrl(`error=${encodeURIComponent(error_description || error)}`));
+  }
+
+  if (!code) {
+    return res.redirect(safeReturnUrl(`error=${encodeURIComponent("Authorization code missing from Google callback.")}`));
+  }
+
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+    const callbackUrl = getGoogleCallbackUrl(req);
+
+    // 1. Exchange authorization code with Google
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: callbackUrl,
+        grant_type: "authorization_code"
+      })
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error("Failed to exchange Google auth code:", tokenData);
+      return res.redirect(safeReturnUrl(`error=${encodeURIComponent(tokenData.error_description || "Failed to exchange authorization code.")}`));
+    }
+
+    // 2. Fetch authenticated Google user info
+    const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const googleUser = await userInfoRes.json();
+
+    if (!googleUser || !googleUser.email) {
+      return res.redirect(safeReturnUrl(`error=${encodeURIComponent("Unable to retrieve Google user profile.")}`));
+    }
+
+    const email = googleUser.email.toLowerCase();
+    const name = googleUser.name || email.split("@")[0];
+    const picture = googleUser.picture || null;
+    const initials = name.split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+
+    // 3. Provision or update IAM user
+    let user = AUTH_USERS.find(u => u.email.toLowerCase() === email);
+    if (!user) {
+      user = {
+        id: `usr-g-${Date.now()}`,
+        name,
+        email,
+        role: "Senior Platform Engineer",
+        avatar: initials || "GU",
+        picture,
+        provider: "google",
+        googleSub: googleUser.sub,
+        emailVerified: true
+      };
+      AUTH_USERS.push(user);
+    } else {
+      if (picture) user.picture = picture;
+      user.provider = "google";
+      user.emailVerified = true;
+    }
+
+    const { password: _, ...safeUser } = user;
+    const token = signJwt({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      provider: "google"
+    });
+
+    console.log(`âœ… [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
+
+    // 4. Redirect user back with authenticated JWT and IAM profile
+    const redirectTarget = safeReturnUrl(
+      `access_token=${encodeURIComponent(token)}&token_type=bearer&user=${encodeURIComponent(JSON.stringify(safeUser))}`
+    );
+    res.redirect(redirectTarget);
+  } catch (err) {
+    console.error("Google OAuth callback exception:", err);
+    res.redirect(safeReturnUrl(`error=${encodeURIComponent(err.message || "Authentication failed")}`));
+  }
 });
 
 /**
@@ -334,7 +544,7 @@ app.post("/api/auth/google", async (req, res) => {
       provider: "google"
     });
 
-    console.log(`✅ [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
+    console.log(`âœ… [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
 
     res.json({
       success: true,
@@ -357,24 +567,13 @@ app.post("/api/auth/login", (req, res) => {
     return res.status(400).json({ success: false, error: "Email and password are required." });
   }
 
-  let user = AUTH_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  const user = AUTH_USERS.find(u => u.email.toLowerCase() === normalized);
   if (!user) {
-    if (email === "alex.chen@enterprise.io" || email.includes("alex")) {
-      user = AUTH_USERS[0];
-    } else {
-      user = {
-        id: `usr-${Date.now()}`,
-        name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-        email,
-        password,
-        role: "Senior Platform Engineer",
-        avatar: email.slice(0, 2).toUpperCase()
-      };
-      AUTH_USERS.push(user);
-    }
+    return res.status(404).json({ success: false, error: "No account found with this email. Please sign in with Email OTP." });
   }
 
-  if (user.password && user.password !== password && password !== "finops2026") {
+  if (user.password && user.password !== password) {
     return res.status(401).json({ success: false, error: "Invalid password for this account." });
   }
 
@@ -398,7 +597,8 @@ app.post("/api/auth/register", (req, res) => {
     return res.status(400).json({ success: false, error: "Name, email, and password are required." });
   }
 
-  const existing = AUTH_USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  const existing = AUTH_USERS.find(u => u.email.toLowerCase() === normalized);
   if (existing) {
     return res.status(409).json({ success: false, error: "Account with this email already exists." });
   }
@@ -407,10 +607,11 @@ app.post("/api/auth/register", (req, res) => {
   const newUser = {
     id: `usr-${Date.now()}`,
     name,
-    email,
+    email: normalized,
     password,
-    role: role || "Senior Platform Engineer",
-    avatar: initials || "FE"
+    role: role || "Platform Engineer",
+    avatar: initials || "PE",
+    emailVerified: false
   };
   AUTH_USERS.push(newUser);
 
@@ -445,117 +646,280 @@ const OTP_STORE = new Map();
 
 /**
  * POST /api/auth/send-otp
- * Dispatches 6-digit OTP code to email or mobile SMS WITHOUT exposing it on screen
+ * Generates a secure, cryptographically random 6-digit numeric code,
+ * saves it with a 10-minute expiry timestamp, and dispatches it to user's real email.
  */
 app.post("/api/auth/send-otp", async (req, res) => {
-  const { contact, purpose } = req.body || {};
-  if (!contact || typeof contact !== "string") {
-    return res.status(400).json({ success: false, error: "Email or phone number is required." });
+  const { email, contact, purpose } = req.body || {};
+  const rawTarget = (email || contact || "").trim();
+
+  if (!rawTarget) {
+    return res.status(400).json({ success: false, error: "Email address is required." });
   }
 
-  const normalized = contact.trim().toLowerCase();
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  OTP_STORE.set(normalized, {
+  const normalizedEmail = rawTarget.toLowerCase();
+
+  // Strict email format validation: valid username, '@', and valid domain with TLD
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    return res.status(400).json({
+      success: false,
+      error: "Please provide a valid email address with a valid domain (e.g., name@domain.com)."
+    });
+  }
+
+  // Rate limiting cooldown: prevent spamming OTP requests within 30 seconds
+  const existingRecord = OTP_STORE.get(normalizedEmail);
+  if (existingRecord && (Date.now() - existingRecord.createdAt < 30 * 1000)) {
+    const waitSecs = Math.ceil((30 * 1000 - (Date.now() - existingRecord.createdAt)) / 1000);
+    return res.status(429).json({
+      success: false,
+      error: `Please wait ${waitSecs}s before requesting another verification code.`
+    });
+  }
+
+  // Generate cryptographically secure 6-digit numeric code (100000 - 999999)
+  const code = crypto.randomInt(100000, 1000000).toString();
+
+  // Save with 10-minute expiry timestamp and zero attempts
+  OTP_STORE.set(normalizedEmail, {
     code,
-    purpose: purpose || "general",
-    expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+    purpose: purpose || "authentication",
+    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    attempts: 0,
+    createdAt: Date.now()
   });
 
-  const isEmail = normalized.includes("@");
-
-  // Always log securely to console (never send code in the HTTP response)
+  // Always log securely to server console
   console.log(`\n======================================================`);
-  console.log(isEmail ? `📧 [EMAIL OTP] To: ${contact}` : `📱 [SMS OTP] To: ${contact}`);
-  console.log(`OTP Code: ${code} | Purpose: ${purpose || "general"}`);
+  console.log(`ðŸ“§ [EMAIL OTP DISPATCH] To: ${normalizedEmail}`);
+  console.log(`OTP Code: [HIDDEN] | (Valid for 10 minutes)`);
   console.log(`======================================================\n`);
 
-  // Attempt real email delivery
+  // 1. Attempt real email delivery via Nodemailer / SMTP / Resend
   let emailDelivered = false;
-  if (isEmail) {
-    try {
-      const sent = await sendOtpEmail(contact, code, process.env.EMAIL_FROM_NAME);
-      if (sent) {
-        emailDelivered = true;
-        console.log(`✅ [EMAIL] OTP delivered to ${contact}`);
-      } else {
-        console.warn(`⚠️  [EMAIL] Nodemailer not configured with Gmail App Password — OTP ${code} logged above.`);
-      }
-    } catch (emailErr) {
-      console.error(`❌ [EMAIL] Failed to send OTP email to ${contact}:`, emailErr.message);
-      // Do NOT fail the request — fallback to devCode
+  let deliveryMethod = "none";
+  let deliveryError = null;
+
+  try {
+    const sent = await sendOtpEmail(normalizedEmail, code, process.env.EMAIL_FROM_NAME);
+    if (sent) {
+      emailDelivered = true;
+      deliveryMethod = "nodemailer";
+      console.log(`âœ… [EMAIL] Real OTP email delivered via Nodemailer/SMTP to ${normalizedEmail}`);
     }
+  } catch (emailErr) {
+    deliveryError = emailErr.message;
+    console.warn(`[EMAIL] Nodemailer dispatch failed: ${emailErr.message}`);
+  }
+
+  // 2. If Nodemailer/Resend not configured or failed, dispatch real email directly via Supabase Auth
+  if (!emailDelivered) {
+    const supabaseUrl = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || "REDACTED_SUPABASE_ANON_KEY";
+    try {
+      const sbRes = await fetch(`${supabaseUrl}/auth/v1/otp`, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: normalizedEmail, create_user: true })
+      });
+      if (sbRes.ok) {
+        emailDelivered = true;
+        deliveryMethod = "supabase";
+        OTP_STORE.set(normalizedEmail, {
+          code,
+          deliveryMethod: "supabase",
+          expiresAt: Date.now() + 10 * 60 * 1000,
+          attempts: 0,
+          createdAt: Date.now()
+        });
+        console.log(`âœ… [EMAIL] Real OTP email delivered via Supabase Auth to inbox of ${normalizedEmail}`);
+      } else {
+        const sbErr = await sbRes.json().catch(() => ({}));
+        deliveryError = sbErr.msg || sbErr.error_description || sbRes.statusText;
+        console.warn(`[EMAIL] Supabase Auth dispatch notice:`, deliveryError);
+      }
+    } catch (sbErr) {
+      deliveryError = sbErr.message;
+      console.warn(`[EMAIL] Supabase dispatch error: ${sbErr.message}`);
+    }
+  }
+
+  // 3. Strict truthfulness: If email was NOT delivered to an actual inbox, DO NOT pretend success!
+  if (!emailDelivered) {
+    OTP_STORE.delete(normalizedEmail);
+    const hasConfig = Boolean(process.env.EMAIL_USER || process.env.SMTP_USER || process.env.RESEND_API_KEY);
+    return res.status(503).json({
+      success: false,
+      error: hasConfig
+        ? `Email delivery failed: ${deliveryError || "Unable to send to your address"}. Please check email credentials in .env.`
+        : "Email delivery service not configured. To receive real OTP codes in your inbox, set EMAIL_USER & EMAIL_PASS (Gmail App Password) or RESEND_API_KEY in .env."
+    });
   }
 
   res.json({
     success: true,
-    targetType: isEmail ? "email" : "phone",
-    emailDelivered,
-    // When SMTP email delivery is not yet configured, supply devCode so user is never blocked
-    devCode: !emailDelivered ? code : undefined,
-    message: emailDelivered
-      ? `Verification code dispatched to your email inbox (${contact}). Please check your inbox and spam folder.`
-      : `Test OTP generated: ${code}. (To receive real inbox emails, configure EMAIL_USER and EMAIL_PASS app password in server/.env)`
+    message: `Verification code sent to ${normalizedEmail}. Please check your inbox and spam folder.`
   });
 });
 
 /**
  * POST /api/auth/verify-otp
+ * Validates the 6-digit code, marks email as verified, creates/updates user profile,
+ * and returns a cryptographic JWT session token.
  */
-app.post("/api/auth/verify-otp", (req, res) => {
-  const { contact, otp } = req.body || {};
-  const normalized = (contact || "").trim().toLowerCase();
-  const record = OTP_STORE.get(normalized);
+app.post("/api/auth/verify-otp", async (req, res) => {
+  const { email, contact, otp } = req.body || {};
+  const normalizedEmail = (email || contact || "").trim().toLowerCase();
+  const inputCode = (otp || "").trim();
 
-  if (!record || record.expiresAt < Date.now()) {
-    return res.status(400).json({ success: false, error: "Verification code expired or not found. Please request a new code." });
+  if (!normalizedEmail || !inputCode) {
+    return res.status(400).json({ success: false, error: "Email address and 6-digit verification code are required." });
   }
 
-  if (record.code !== (otp || "").trim() && otp !== "749102") {
-    return res.status(400).json({ success: false, error: "Invalid verification code. Please check your inbox or messages and try again." });
+  let codeVerified = false;
+  let verifiedUserMeta = null;
+  const record = OTP_STORE.get(normalizedEmail);
+
+  // 1. Check local OTP Store (for Nodemailer / SMTP generated codes)
+  if (record && record.expiresAt >= Date.now()) {
+    record.attempts = (record.attempts || 0) + 1;
+    if (record.attempts > 5) {
+      OTP_STORE.delete(normalizedEmail);
+      return res.status(429).json({ success: false, error: "Too many incorrect attempts. Please request a new verification code." });
+    }
+    if (record.code === inputCode) {
+      codeVerified = true;
+      OTP_STORE.delete(normalizedEmail);
+    }
   }
 
-  res.json({ success: true, verified: true });
+  // 2. If not verified locally, verify against Supabase Auth (for Supabase real email delivery)
+  if (!codeVerified) {
+    const supabaseUrl = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || "REDACTED_SUPABASE_ANON_KEY";
+    try {
+      const sbVerifyRes = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: normalizedEmail, token: inputCode, type: "email" })
+      });
+      if (sbVerifyRes.ok) {
+        const sbData = await sbVerifyRes.json();
+        codeVerified = true;
+        verifiedUserMeta = sbData.user;
+        if (record) OTP_STORE.delete(normalizedEmail);
+      }
+    } catch (sbErr) {
+      console.warn("Supabase verify request notice:", sbErr.message);
+    }
+  }
+
+  if (!codeVerified) {
+    if (record && record.expiresAt < Date.now()) {
+      OTP_STORE.delete(normalizedEmail);
+      return res.status(400).json({
+        success: false,
+        error: "Verification code has expired. Please request a new code."
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: "Invalid 6-digit verification code. Please check your inbox and try again."
+    });
+  }
+
+  // Find existing or provision new IAM user profile with their real email
+  let user = AUTH_USERS.find(u => u.email.toLowerCase() === normalizedEmail);
+  if (!user) {
+    const rawName = (verifiedUserMeta?.user_metadata?.full_name || verifiedUserMeta?.user_metadata?.name || normalizedEmail.split("@")[0])
+      .replace(/[._]/g, " ")
+      .replace(/\b\w/g, c => c.toUpperCase());
+    const initials = rawName.split(/\s+/).slice(0, 2).map(n => n[0]).join("").toUpperCase() || normalizedEmail.slice(0, 2).toUpperCase();
+    user = {
+      id: verifiedUserMeta?.id || `usr-${Date.now()}`,
+      name: rawName,
+      email: normalizedEmail,
+      role: "Platform Engineer",
+      avatar: initials,
+      emailVerified: true,
+      verifiedAt: new Date().toISOString(),
+      provider: "email_otp"
+    };
+    AUTH_USERS.push(user);
+  } else {
+    user.emailVerified = true;
+    user.verifiedAt = new Date().toISOString();
+  }
+
+  // Issue cryptographic JWT session token (HMAC-SHA256)
+  const token = signJwt({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    provider: user.provider || "email_otp"
+  });
+
+  console.log(`âœ… [AUTH] User verified & session granted: ${user.name} (${user.email})`);
+
+  const { password: _, ...safeUser } = user;
+  res.json({
+    success: true,
+    verified: true,
+    message: `Welcome, ${user.name}! Authentication successful.`,
+    user: safeUser,
+    token
+  });
 });
 
 /**
  * POST /api/auth/reset-password
  */
 app.post("/api/auth/reset-password", (req, res) => {
-  const { contact, otp, newPassword } = req.body || {};
-  if (!contact || !otp || !newPassword) {
-    return res.status(400).json({ success: false, error: "Contact, verification code, and new password are required." });
+  const { contact, email, otp, newPassword } = req.body || {};
+  const normalizedEmail = (email || contact || "").trim().toLowerCase();
+
+  if (!normalizedEmail || !otp || !newPassword) {
+    return res.status(400).json({ success: false, error: "Email, verification code, and new password are required." });
   }
   if (newPassword.length < 6) {
     return res.status(400).json({ success: false, error: "Password must be at least 6 characters long." });
   }
 
-  const normalized = contact.trim().toLowerCase();
-  const record = OTP_STORE.get(normalized);
+  const record = OTP_STORE.get(normalizedEmail);
   if (!record || record.expiresAt < Date.now()) {
+    if (record) OTP_STORE.delete(normalizedEmail);
     return res.status(400).json({ success: false, error: "Verification code has expired. Please request a new code." });
   }
-  if (record.code !== otp.trim() && otp.trim() !== "749102") {
+  if (record.code !== otp.trim()) {
     return res.status(400).json({ success: false, error: "Invalid verification code." });
   }
 
-  OTP_STORE.delete(normalized);
+  OTP_STORE.delete(normalizedEmail);
 
-  let user = AUTH_USERS.find(u =>
-    u.email.toLowerCase() === normalized ||
-    (u.name && u.name.toLowerCase() === normalized)
-  );
-
+  let user = AUTH_USERS.find(u => u.email.toLowerCase() === normalizedEmail);
   if (user) {
     user.password = newPassword;
   } else {
-    AUTH_USERS.push({
+    const rawName = normalizedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    user = {
       id: `usr-${Date.now()}`,
-      name: normalized.split("@")[0],
-      email: normalized.includes("@") ? normalized : `${normalized}@enterprise.io`,
+      name: rawName,
+      email: normalizedEmail,
       password: newPassword,
       role: "Platform Engineer",
-      avatar: "PR"
-    });
+      avatar: rawName.slice(0, 2).toUpperCase()
+    };
+    AUTH_USERS.push(user);
   }
 
   res.json({ success: true, message: "Password updated successfully. You can now sign in." });
@@ -563,7 +927,7 @@ app.post("/api/auth/reset-password", (req, res) => {
 
 /**
  * POST /api/chat
- * LLM Chat endpoint — uses server-side GEMINI_API_KEY with gemini-3.8-flash
+ * LLM Chat endpoint â€” uses server-side GEMINI_API_KEY with gemini-3.8-flash
  * Accepts { messages: [{role, text}], systemPrompt } and streams back a full response
  */
 app.post("/api/chat", async (req, res) => {
@@ -759,7 +1123,7 @@ app.post("/api/audit", async (req, res) => {
       });
     }
 
-    console.log(`🤖 Starting CloudPrune AI audit on ${runningInstances.length} active instances...`);
+    console.log(`ðŸ¤– Starting CloudPrune AI audit on ${runningInstances.length} active instances...`);
     const auditResult = await runGeminiFinOpsAudit(instances);
 
     res.json({
@@ -873,9 +1237,9 @@ app.get("/", (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`====================================================`);
-    console.log(`🚀 CloudPrune AI FinOps Server running on port ${PORT}`);
-    console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
-    console.log(`📊 API Health:    http://localhost:${PORT}/api/health`);
+    console.log(`ðŸš€ CloudPrune AI FinOps Server running on port ${PORT}`);
+    console.log(`ðŸ“ Web Dashboard: http://localhost:${PORT}`);
+    console.log(`ðŸ“Š API Health:    http://localhost:${PORT}/api/health`);
     console.log(`====================================================`);
   });
 }

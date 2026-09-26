@@ -153,13 +153,15 @@ export const api = {
     return res.data;
   },
 
-  async sendOtp(contact, purpose = 'registration') {
-    const res = await apiClient.post('/auth/send-otp', { contact, purpose });
+  async sendOtp(emailOrContact, purpose = 'authentication') {
+    const email = typeof emailOrContact === 'string' ? emailOrContact : (emailOrContact.email || emailOrContact.contact);
+    const res = await apiClient.post('/auth/send-otp', { email, contact: email, purpose });
     return res.data;
   },
 
-  async verifyOtp(contact, otp) {
-    const res = await apiClient.post('/auth/verify-otp', { contact, otp });
+  async verifyOtp(emailOrContact, otp) {
+    const email = typeof emailOrContact === 'string' ? emailOrContact : (emailOrContact.email || emailOrContact.contact);
+    const res = await apiClient.post('/auth/verify-otp', { email, contact: email, otp });
     return res.data;
   },
 

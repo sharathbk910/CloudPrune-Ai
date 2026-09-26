@@ -44,6 +44,52 @@ export async function signInWithGoogle() {
 }
 
 /**
+ * Initiates Email OTP verification via Supabase Auth
+ * @param {string} email
+ */
+export async function signInWithOtp(email) {
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Verifies Email OTP token via Supabase Auth
+ * @param {string} email
+ * @param {string} token - 6-digit numeric OTP
+ */
+export async function verifyOtp(email, token) {
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email'
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
  * Sign out helper
  */
 export async function signOut() {
@@ -51,3 +97,4 @@ export async function signOut() {
     await supabase.auth.signOut();
   }
 }
+

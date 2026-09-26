@@ -12,7 +12,9 @@ import PerformancePanel from './components/PerformancePanel';
 import DatabasePanel from './components/DatabasePanel';
 import { SidebarNav, KeyboardShortcutsModal, ErrorBoundary } from './components/NavigationShell';
 import AIChatWidget from './components/AIChatWidget';
-import { ShieldCheck, Cloud, Terminal, Sparkles, Check, AlertCircle, Plus, Keyboard } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import { supabase } from './supabase';
+import { ShieldCheck, Cloud, Terminal, Sparkles, Check, AlertCircle, Plus, Keyboard, Lock, LogOut, User } from 'lucide-react';
 
 function AppContent() {
   const [instances, setInstances] = useState([]);
@@ -32,6 +34,20 @@ function AppContent() {
   const [toast, setToast] = useState(null);
   const [activeSection, setActiveSection] = useState('metrics');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('login');
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cloudprune_user');
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      const fakeIndicators = ['alex.chen', 'demo@', 'test@example.com', 'dummy@', '@enterprise.io'];
+      if (!parsed || !parsed.email || !parsed.email.includes('@') || fakeIndicators.some(ind => (parsed.email || '').toLowerCase().includes(ind))) {
+        return null;
+      }
+      return parsed;
+    } catch (_) { return null; }
+  });
 
   // Section refs for scrolling
   const sectionRefs = {
@@ -73,10 +89,101 @@ function AppContent() {
   }, [showToast]);
 
   useEffect(() => {
+    // Purge any legacy fake/demo sessions on startup
+    try {
+      const existingUserStr = localStorage.getItem('cloudprune_user');
+      if (existingUserStr) {
+        const parsed = JSON.parse(existingUserStr);
+        const fakeIndicators = ['alex.chen', 'demo@', 'test@example.com', 'dummy@', '@enterprise.io'];
+        if (!parsed || !parsed.email || !parsed.email.includes('@') || fakeIndicators.some(ind => (parsed.email || '').toLowerCase().includes(ind))) {
+          localStorage.removeItem('cloudprune_user');
+          localStorage.removeItem('cloudprune_token');
+          setCurrentUser(null);
+        }
+      }
+    } catch (_) {}
+
     loadData(true);
     const interval = setInterval(() => loadData(false), 10000); // Polling every 10s
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Listen for Google OAuth callback params in window.location.hash
+  useEffect(() => {
+    if (window.location.hash) {
+      try {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const userParam = params.get('user');
+        const token = params.get('access_token');
+        const authErr = params.get('error') || params.get('auth_error');
+
+        if (authErr) {
+          showToast(`Google authentication error: ${authErr}`, 'error');
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else if (userParam) {
+          const userObj = JSON.parse(decodeURIComponent(userParam));
+          if (userObj && userObj.email) {
+            setCurrentUser(userObj);
+            localStorage.setItem('cloudprune_user', JSON.stringify(userObj));
+            if (token) localStorage.setItem('cloudprune_token', token);
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            showToast(`Welcome back, ${userObj.name || userObj.email}! Authenticated via Google.`, 'success');
+          }
+        }
+      } catch (e) {
+        console.warn('OAuth hash parse error:', e);
+      }
+    }
+  }, [showToast]);
+
+  // Listen to Supabase Google OAuth session changes on redirect
+  useEffect(() => {
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const u = session.user;
+          const rawName = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0];
+          const userObj = {
+            id: u.id,
+            name: rawName,
+            email: u.email,
+            role: "Platform Engineer",
+            avatar: u.user_metadata?.avatar_url || null,
+            emailVerified: true,
+            provider: session.user.app_metadata?.provider || "oauth"
+          };
+          setCurrentUser(userObj);
+          localStorage.setItem('cloudprune_user', JSON.stringify(userObj));
+          if (session.access_token) {
+            localStorage.setItem('cloudprune_token', session.access_token);
+          }
+        }
+      }).catch(() => {});
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+          const u = session.user;
+          const rawName = u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0];
+          const userObj = {
+            id: u.id,
+            name: rawName,
+            email: u.email,
+            role: "Platform Engineer",
+            avatar: u.user_metadata?.avatar_url || null,
+            emailVerified: true,
+            provider: session.user.app_metadata?.provider || "oauth"
+          };
+          setCurrentUser(userObj);
+          localStorage.setItem('cloudprune_user', JSON.stringify(userObj));
+          if (session.access_token) {
+            localStorage.setItem('cloudprune_token', session.access_token);
+          }
+        }
+      });
+      return () => subscription?.unsubscribe();
+    }
+  }, []);
 
   // Navigate to section via sidebar
   const handleNavigate = useCallback((sectionId) => {
@@ -408,6 +515,62 @@ function AppContent() {
               <Terminal className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden sm:inline">Audit Trail</span>
             </button>
+
+            {/* Email OTP Auth / User Chip */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-gray-800">
+                <div
+                  className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-900/90 border border-amber-500/40"
+                  title={`Verified FinOps IAM: ${currentUser.email}`}
+                >
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-gray-950 font-bold text-[10px] flex items-center justify-center font-mono">
+                    {currentUser.avatar || currentUser.name?.slice(0, 2).toUpperCase() || 'CP'}
+                  </div>
+                  <div className="hidden md:flex flex-col text-left leading-none">
+                    <span className="text-[11px] font-bold text-white truncate max-w-[120px]">
+                      {currentUser.name || currentUser.email.split('@')[0]}
+                    </span>
+                    <span className="text-[9px] text-amber-400/90 truncate max-w-[120px]">
+                      {currentUser.email}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const prevName = currentUser.name || currentUser.email;
+                    localStorage.removeItem('cloudprune_user');
+                    localStorage.removeItem('cloudprune_token');
+                    if (supabase) await supabase.auth.signOut().catch(() => {});
+                    setCurrentUser(null);
+                    showToast(`Signed out successfully. Session terminated for ${prevName}.`, 'info');
+                  }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-gray-900 transition-colors"
+                  title="Sign Out & Lock Session"
+                  aria-label="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setAuthModalMode('login'); setIsAuthModalOpen(true); }}
+                  className="px-3 py-1.5 rounded-lg border border-gray-700 hover:border-amber-400 text-gray-300 hover:text-white font-medium text-xs transition-all flex items-center gap-1.5 active:scale-95"
+                  aria-label="Sign In"
+                >
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Sign In</span>
+                </button>
+                <button
+                  onClick={() => { setAuthModalMode('register'); setIsAuthModalOpen(true); }}
+                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-gray-950 font-bold text-xs transition-all shadow-md shadow-amber-950/30 flex items-center gap-1.5 active:scale-95"
+                  aria-label="Create an Account"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Sign Up</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -535,6 +698,17 @@ function AppContent() {
       <KeyboardShortcutsModal
         isOpen={showShortcuts}
         onClose={() => setShowShortcuts(false)}
+      />
+
+      {/* Email OTP Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        initialMode={authModalMode}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Welcome, ${user.name || user.email}! FinOps IAM session active.`);
+        }}
       />
 
       {/* Floating Gemini AI FinOps Assistant */}
