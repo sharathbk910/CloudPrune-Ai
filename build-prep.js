@@ -47,6 +47,7 @@ const filesToCopy = [
   'index.html',
   'style.css',
   'app.js',
+  'gemini_generated_video_a53d7be8.mp4',
   'ai.webp',
   'clors.avif',
   'clors.png',
