@@ -268,6 +268,50 @@ app.get("/api/health", (req, res) => {
  */
 const AUTH_USERS = [];
 
+// ============================================
+// SUPABASE PROFILE PERSISTENCE
+// Upserts user details to the `profiles` table
+// via Supabase REST API (no SDK required)
+// ============================================
+async function upsertUserToSupabase(user) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return; // not configured, skip silently
+  try {
+    const payload = {
+      id: user.id,
+      email: user.email,
+      name: user.name || null,
+      role: user.role || null,
+      avatar: user.avatar || null,
+      picture: user.picture || null,
+      provider: user.provider || null,
+      email_verified: user.emailVerified || false,
+      google_sub: user.googleSub || null,
+      verified_at: user.verifiedAt || null,
+      updated_at: new Date().toISOString()
+    };
+    const res = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+      method: "POST",
+      headers: {
+        "apikey": serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=representation"
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[SUPABASE] Profile upsert warning for ${user.email}:`, errText);
+    } else {
+      console.log(`âœ… [SUPABASE] Profile saved for ${user.email}`);
+    }
+  } catch (err) {
+    console.warn(`[SUPABASE] Profile upsert error for ${user.email}:`, err.message);
+  }
+}
+
 // Default public OAuth Client ID fallback (split to prevent static regex false positives in Git push protection)
 const DEFAULT_GOOGLE_CLIENT_ID = [
   "107703514672-s74rnd4oqk24a4e2m0epcp6tofhj9jao",
@@ -403,14 +447,19 @@ app.get("/api/auth/google/callback", async (req, res) => {
         picture,
         provider: "google",
         googleSub: googleUser.sub,
-        emailVerified: true
+        emailVerified: true,
+        verifiedAt: new Date().toISOString()
       };
       AUTH_USERS.push(user);
     } else {
       if (picture) user.picture = picture;
       user.provider = "google";
       user.emailVerified = true;
+      user.verifiedAt = new Date().toISOString();
     }
+
+    // Persist to Supabase profiles table
+    upsertUserToSupabase(user).catch(() => {});
 
     const { password: _, ...safeUser } = user;
     const token = signJwt({
@@ -531,13 +580,20 @@ app.post("/api/auth/google", async (req, res) => {
         avatar: initials || "GU",
         picture,
         provider: "google",
-        googleSub: googleUser.sub
+        googleSub: googleUser.sub,
+        emailVerified: true,
+        verifiedAt: new Date().toISOString()
       };
       AUTH_USERS.push(user);
     } else {
       if (picture) user.picture = picture;
       user.provider = "google";
+      user.emailVerified = true;
+      user.verifiedAt = new Date().toISOString();
     }
+
+    // Persist to Supabase profiles table
+    upsertUserToSupabase(user).catch(() => {});
 
     const { password: _, ...safeUser } = user;
     const token = signJwt({
@@ -863,6 +919,9 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     user.emailVerified = true;
     user.verifiedAt = new Date().toISOString();
   }
+
+  // Persist verified user details to Supabase profiles table
+  upsertUserToSupabase(user).catch(() => {});
 
   // Issue cryptographic JWT session token (HMAC-SHA256)
   const token = signJwt({
