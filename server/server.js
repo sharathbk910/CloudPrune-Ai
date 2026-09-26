@@ -1,4 +1,4 @@
-﻿const path = require("path");
+const path = require("path");
 const fs = require("fs");
 
 // Load backend .env and root .env fallback
@@ -47,7 +47,7 @@ function createEmailTransporter() {
     });
   }
 
-  return null; // Not configured â€” fallback to console logging
+  return null; // Not configured — fallback to console logging
 }
 
 async function sendOtpEmail(toEmail, code, fromName) {
@@ -64,12 +64,12 @@ async function sendOtpEmail(toEmail, code, fromName) {
         body: JSON.stringify({
           from: fromAddr,
           to: [toEmail],
-          subject: `${code} â€” Your CloudPrune AI Verification Code`,
+          subject: `${code} — Your CloudPrune AI Verification Code`,
           html: generateOtpHtmlEmail(code)
         })
       });
       if (res.ok) {
-        console.log(`âœ… [EMAIL] OTP sent via Resend API to ${toEmail}`);
+        console.log(`✅ [EMAIL] OTP sent via Resend API to ${toEmail}`);
         return true;
       }
     } catch (rErr) {
@@ -80,7 +80,7 @@ async function sendOtpEmail(toEmail, code, fromName) {
   // 2. Deliver via Nodemailer (Gmail or Custom SMTP)
   const transporter = createEmailTransporter();
   if (!transporter) {
-    console.warn(`[EMAIL] Email transporter not configured in server/.env â€” OTP logged below.`);
+    console.warn(`[EMAIL] Email transporter not configured in server/.env — OTP logged below.`);
     return false;
   }
 
@@ -113,7 +113,7 @@ function generateOtpHtmlEmail(code) {
           ${code}
         </div>
         <p style="margin:26px 0 0;font-size:12px;color:#6b7280;line-height:1.5">
-          ðŸ›¡ï¸ If you did not request this login code, you can safely ignore this email. Never share this code with anyone. CloudPrune engineers will never ask for your verification code.
+          🛡️ If you did not request this login code, you can safely ignore this email. Never share this code with anyone. CloudPrune engineers will never ask for your verification code.
         </p>
       </div>
       <div style="padding:18px 36px;background:#070a10;border-top:1px solid #172033;font-size:11px;color:#4b5563;text-align:center">
@@ -279,9 +279,8 @@ const AUTH_USERS = [];
 
 // Hard-coded fallbacks ensure this works on Vercel even if the
 // env vars haven't been added to the dashboard yet.
-const SUPABASE_REST_URL = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  "REDACTED_SUPABASE_SERVICE_KEY";
+const SUPABASE_REST_URL = process.env.SUPABASE_URL || null;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
 
 async function upsertUserToSupabase(user) {
   const now = new Date().toISOString();
@@ -312,7 +311,7 @@ async function upsertUserToSupabase(user) {
         "apikey":        SUPABASE_SERVICE_KEY,
         "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
         "Content-Type":  "application/json",
-        // merge-duplicates = INSERT â€¦ ON CONFLICT (id) DO UPDATE
+        // merge-duplicates = INSERT … ON CONFLICT (id) DO UPDATE
         "Prefer":        "resolution=merge-duplicates,return=representation"
       },
       body: JSON.stringify(payload)
@@ -323,15 +322,15 @@ async function upsertUserToSupabase(user) {
     if (!res.ok) {
       // Surface the full Supabase error so it's visible in Vercel Function logs
       console.error(
-        `[SUPABASE] âŒ Profile upsert FAILED for ${user.email} ` +
+        `[SUPABASE] ❌ Profile upsert FAILED for ${user.email} ` +
         `(HTTP ${res.status}): ${responseText}`
       );
     } else {
-      console.log(`[SUPABASE] âœ… Profile saved/updated for ${user.email} â€” last_login: ${now}`);
+      console.log(`[SUPABASE] ✅ Profile saved/updated for ${user.email} — last_login: ${now}`);
     }
   } catch (err) {
     // Network/timeout errors
-    console.error(`[SUPABASE] âŒ Profile upsert EXCEPTION for ${user.email}: ${err.message}`);
+    console.error(`[SUPABASE] ❌ Profile upsert EXCEPTION for ${user.email}: ${err.message}`);
   }
 }
 
@@ -493,7 +492,7 @@ app.get("/api/auth/google/callback", async (req, res) => {
       provider: "google"
     });
 
-    console.log(`âœ… [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
+    console.log(`✅ [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
 
     // 4. Redirect user back with authenticated JWT and IAM profile
     const redirectTarget = safeReturnUrl(
@@ -627,7 +626,7 @@ app.post("/api/auth/google", async (req, res) => {
       provider: "google"
     });
 
-    console.log(`âœ… [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
+    console.log(`✅ [AUTH] User authenticated via Google OAuth: ${user.name} (${user.email})`);
 
     res.json({
       success: true,
@@ -775,7 +774,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
   // Always log securely to server console
   console.log(`\n======================================================`);
-  console.log(`ðŸ“§ [EMAIL OTP DISPATCH] To: ${normalizedEmail}`);
+  console.log(`📧 [EMAIL OTP DISPATCH] To: ${normalizedEmail}`);
   console.log(`OTP Code: [HIDDEN] | (Valid for 10 minutes)`);
   console.log(`======================================================\n`);
 
@@ -789,7 +788,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
     if (sent) {
       emailDelivered = true;
       deliveryMethod = "nodemailer";
-      console.log(`âœ… [EMAIL] Real OTP email delivered via Nodemailer/SMTP to ${normalizedEmail}`);
+      console.log(`✅ [EMAIL] Real OTP email delivered via Nodemailer/SMTP to ${normalizedEmail}`);
     }
   } catch (emailErr) {
     deliveryError = emailErr.message;
@@ -798,8 +797,8 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
   // 2. If Nodemailer/Resend not configured or failed, dispatch real email directly via Supabase Auth
   if (!emailDelivered) {
-    const supabaseUrl = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || "REDACTED_SUPABASE_ANON_KEY";
+    const supabaseUrl = process.env.SUPABASE_URL || null;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || null;
     try {
       const sbRes = await fetch(`${supabaseUrl}/auth/v1/otp`, {
         method: "POST",
@@ -820,7 +819,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
           attempts: 0,
           createdAt: Date.now()
         });
-        console.log(`âœ… [EMAIL] Real OTP email delivered via Supabase Auth to inbox of ${normalizedEmail}`);
+        console.log(`✅ [EMAIL] Real OTP email delivered via Supabase Auth to inbox of ${normalizedEmail}`);
       } else {
         const sbErr = await sbRes.json().catch(() => ({}));
         deliveryError = sbErr.msg || sbErr.error_description || sbRes.statusText;
@@ -883,8 +882,8 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
   // 2. If not verified locally, verify against Supabase Auth (for Supabase real email delivery)
   if (!codeVerified) {
-    const supabaseUrl = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || "REDACTED_SUPABASE_ANON_KEY";
+    const supabaseUrl = process.env.SUPABASE_URL || null;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY || null;
     try {
       const sbVerifyRes = await fetch(`${supabaseUrl}/auth/v1/verify`, {
         method: "POST",
@@ -955,7 +954,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     provider: user.provider || "email_otp"
   });
 
-  console.log(`âœ… [AUTH] User verified & session granted: ${user.name} (${user.email})`);
+  console.log(`✅ [AUTH] User verified & session granted: ${user.name} (${user.email})`);
 
   const { password: _, ...safeUser } = user;
   res.json({
@@ -1013,7 +1012,7 @@ app.post("/api/auth/reset-password", (req, res) => {
 
 /**
  * POST /api/chat
- * LLM Chat endpoint â€” uses server-side GEMINI_API_KEY with gemini-3.8-flash
+ * LLM Chat endpoint — uses server-side GEMINI_API_KEY with gemini-3.8-flash
  * Accepts { messages: [{role, text}], systemPrompt } and streams back a full response
  */
 app.post("/api/chat", async (req, res) => {
@@ -1209,7 +1208,7 @@ app.post("/api/audit", async (req, res) => {
       });
     }
 
-    console.log(`ðŸ¤– Starting CloudPrune AI audit on ${runningInstances.length} active instances...`);
+    console.log(`🤖 Starting CloudPrune AI audit on ${runningInstances.length} active instances...`);
     const auditResult = await runGeminiFinOpsAudit(instances);
 
     res.json({
@@ -1323,9 +1322,9 @@ app.get("/", (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`====================================================`);
-    console.log(`ðŸš€ CloudPrune AI FinOps Server running on port ${PORT}`);
-    console.log(`ðŸ“ Web Dashboard: http://localhost:${PORT}`);
-    console.log(`ðŸ“Š API Health:    http://localhost:${PORT}/api/health`);
+    console.log(`🚀 CloudPrune AI FinOps Server running on port ${PORT}`);
+    console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
+    console.log(`📊 API Health:    http://localhost:${PORT}/api/health`);
     console.log(`====================================================`);
   });
 }
