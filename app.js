@@ -928,6 +928,25 @@ function initSmoothVideoLoop() {
   const video = document.getElementById('hero-video');
   if (!video) return;
 
+  // Guarantee muted state for browser autoplay policy
+  video.muted = true;
+  video.defaultMuted = true;
+
+  const tryPlay = () => {
+    if (video.paused) {
+      const p = video.play();
+      if (p !== undefined) {
+        p.catch(() => {});
+      }
+    }
+  };
+
+  tryPlay();
+  video.addEventListener('loadeddata', tryPlay, { once: true });
+  video.addEventListener('canplay', tryPlay, { once: true });
+  document.addEventListener('touchstart', tryPlay, { once: true, passive: true });
+  document.addEventListener('scroll', tryPlay, { once: true, passive: true });
+
   let isFading = false;
   const FADE_LEAD_TIME = 0.85; // seconds before end to begin fade-out
 
