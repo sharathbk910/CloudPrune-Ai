@@ -130,8 +130,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "cloudprune-enterprise-jwt-secret-k
 
 // Serverless route normalizer for Vercel deployment
 app.use((req, res, next) => {
-  // 1. If Vercel rewrote to /api/index.js, restore from header or strip
-  if (req.url.startsWith("/api/index.js")) {
+  if (req.query && req.query.path) {
+    const rawPath = Array.isArray(req.query.path) ? req.query.path.join("/") : req.query.path;
+    req.url = `/api/${rawPath}`;
+  } else if (req.url.startsWith("/api/index.js")) {
     const original = req.headers["x-matched-path"] || req.headers["x-now-route-matches"] || "";
     if (original && original.startsWith("/api")) {
       req.url = original;
@@ -139,15 +141,17 @@ app.use((req, res, next) => {
       req.url = req.url.replace(/^\/api\/index\.js/, "/api");
     }
   }
-  // 2. If Vercel stripped the /api prefix, prepend it for known API routes
-  if (!req.url.startsWith("/api") && !req.url.startsWith("/app") && !req.url.startsWith("/console") && !req.url.startsWith("/assets") && req.url !== "/" && req.url !== "/index.html") {
-    const candidate = `/api${req.url}`;
-    const knownApiPrefixes = ["/api/health", "/api/auth", "/api/instances", "/api/metrics", "/api/audit", "/api/chat", "/api/terminate"];
-    if (knownApiPrefixes.some(p => candidate.startsWith(p))) {
-      req.url = candidate;
-    }
-  }
   next();
+});
+
+// Root API status endpoint
+app.get("/api", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "CloudPrune AI FinOps Agent API",
+    version: "2.0.0",
+    health: "/api/health"
+  });
 });
 
 // ============================================
