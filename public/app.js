@@ -235,13 +235,14 @@ async function loadFromBackend() {
 function computeMetrics() {
   const running = state.instances.filter(i => i.status === 'running');
   const terminated = state.instances.filter(i => i.status === 'terminated');
-  const totalSpend = running.reduce((acc, i) => acc + i.monthlyCost, 0);
+  const totalSpend = running.reduce((acc, i) => acc + (Number(i.monthlyCost) || 0), 0);
 
-  const zombies = running.filter(i =>
-    i.cpuUtilization < 5 || i.tags.some(t => ['abandoned', 'expired', 'zombie-candidate', 'idle-eval', 'temporary'].includes(t))
-  );
+  const zombies = running.filter(i => {
+    const tList = Array.isArray(i.tags) ? i.tags : (typeof i.tags === 'string' ? i.tags.split(',') : []);
+    return (Number(i.cpuUtilization) || 0) < 5 || tList.some(t => ['abandoned', 'expired', 'zombie-candidate', 'idle-eval', 'temporary'].includes(String(t).trim().toLowerCase()));
+  });
 
-  const waste = zombies.reduce((acc, i) => acc + i.monthlyCost, 0);
+  const waste = zombies.reduce((acc, i) => acc + (Number(i.monthlyCost) || 0), 0);
 
   state.metrics.totalMonthlySpend = Math.round(totalSpend * 100) / 100;
   state.metrics.estimatedMonthlyWaste = Math.round(waste * 100) / 100;
@@ -278,12 +279,13 @@ function renderTable() {
       state.activeFilter === 'flagged' ? Boolean(state.flaggedMap[inst.id]) && inst.status === 'running' :
       state.activeFilter === 'terminated' ? inst.status === 'terminated' : true;
 
-    const query = state.searchQuery.toLowerCase();
+    const query = (state.searchQuery || '').toLowerCase();
+    const instTags = Array.isArray(inst.tags) ? inst.tags : (typeof inst.tags === 'string' ? inst.tags.split(',') : []);
     const matchesSearch =
-      inst.name.toLowerCase().includes(query) ||
-      inst.id.toLowerCase().includes(query) ||
-      inst.type.toLowerCase().includes(query) ||
-      inst.tags.some(t => t.toLowerCase().includes(query));
+      (inst.name || '').toLowerCase().includes(query) ||
+      (inst.id || '').toLowerCase().includes(query) ||
+      (inst.type || '').toLowerCase().includes(query) ||
+      instTags.some(t => String(t).toLowerCase().includes(query));
 
     return matchesFilter && matchesSearch;
   });
@@ -298,24 +300,31 @@ function renderTable() {
     const isTerminated = inst.status === 'terminated';
     const isChecked = state.selectedIds.has(inst.id);
 
-    const cpuColor = inst.cpuUtilization < 5 ? 'red' : inst.cpuUtilization > 75 ? 'emerald' : 'indigo';
-    const memColor = inst.memoryUtilization < 15 ? 'amber' : 'indigo';
+    const cpuVal = Number(inst.cpuUtilization) || 0;
+    const memVal = Number(inst.memoryUtilization) || 0;
+    const costVal = Number(inst.monthlyCost) || 0;
+
+    const cpuColor = cpuVal < 5 ? 'red' : cpuVal > 75 ? 'emerald' : 'indigo';
+    const memColor = memVal < 15 ? 'amber' : 'indigo';
 
     // Format environment cleanly
+    const tags = Array.isArray(inst.tags) ? inst.tags : (typeof inst.tags === 'string' ? inst.tags.split(',') : []);
+    const cleanTags = tags.map(t => String(t).trim().toLowerCase());
+
     let envClass = 'env-dev';
     let envLabel = 'Development';
-    if (inst.tags.some(t => t.includes('prod'))) {
+    if (cleanTags.some(t => t.includes('prod'))) {
       envClass = 'env-prod';
       envLabel = 'Production';
-    } else if (inst.tags.some(t => t.includes('staging'))) {
+    } else if (cleanTags.some(t => t.includes('staging'))) {
       envClass = 'env-staging';
       envLabel = 'Staging';
-    } else if (inst.tags.some(t => ['load-test', 'qa', 'sandbox'].includes(t))) {
+    } else if (cleanTags.some(t => ['load-test', 'qa', 'sandbox'].includes(t))) {
       envClass = 'env-qa';
       envLabel = 'QA / Testbed';
     }
 
-    const isZombieCandidate = inst.tags.some(t => ['abandoned', 'expired', 'zombie-candidate', 'idle-eval'].includes(t));
+    const isZombieCandidate = cleanTags.some(t => ['abandoned', 'expired', 'zombie-candidate', 'idle-eval'].includes(t));
 
     return `
       <tr class="${isTerminated ? 'terminated-row' : isFlagged ? 'flagged-row' : ''}">
@@ -333,7 +342,7 @@ function renderTable() {
             </div>
             <div class="inst-info">
               <div class="inst-name-row">
-                <span class="inst-name">${inst.name}</span>
+                <span class="inst-name">${inst.name || 'Cloud Workload'}</span>
                 ${isFlagged && !isTerminated ? '<span class="zombie-chip">Idle</span>' : ''}
               </div>
             </div>
@@ -349,10 +358,10 @@ function renderTable() {
           <div class="progress-bar-wrap">
             <div class="progress-header">
               <span style="font-size:11px;color:var(--outline)">CPU</span>
-              <span style="${inst.cpuUtilization < 5 ? 'color:#f87171;font-weight:700' : 'color:#e2e8f0'}">${inst.cpuUtilization}%</span>
+              <span style="${cpuVal < 5 ? 'color:#f87171;font-weight:700' : 'color:#e2e8f0'}">${cpuVal}%</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${cpuColor}" style="width:${Math.max(5, Math.min(100, inst.cpuUtilization))}%"></div>
+              <div class="progress-fill ${cpuColor}" style="width:${Math.max(5, Math.min(100, cpuVal))}%"></div>
             </div>
           </div>
         </td>
@@ -360,22 +369,22 @@ function renderTable() {
           <div class="progress-bar-wrap">
             <div class="progress-header">
               <span style="font-size:11px;color:var(--outline)">MEM</span>
-              <span style="color:#e2e8f0">${inst.memoryUtilization}%</span>
+              <span style="color:#e2e8f0">${memVal}%</span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill ${memColor}" style="width:${Math.max(5, Math.min(100, inst.memoryUtilization))}%"></div>
+              <div class="progress-fill ${memColor}" style="width:${Math.max(5, Math.min(100, memVal))}%"></div>
             </div>
           </div>
         </td>
         <td style="font-family:var(--font-mono);font-size:13px;font-weight:700;${isFlagged && !isTerminated ? 'color:#f87171' : 'color:#fff'}">
-          $${inst.monthlyCost.toFixed(2)}<span style="font-size:10px;color:var(--outline);font-weight:400">/mo</span>
+          $${costVal.toFixed(2)}<span style="font-size:10px;color:var(--outline);font-weight:400">/mo</span>
         </td>
         <td>
           <span class="status-pill ${isTerminated ? 'terminated' : isFlagged ? 'zombie' : 'active'}">
             <span style="width:6px;height:6px;border-radius:50%;background:${isTerminated ? '#94a3b8' : isFlagged ? '#f87171' : '#34d399'}"></span>
             ${isTerminated ? 'Terminated' : isFlagged ? 'Idle (Zombie)' : 'Active'}
           </span>
-          <div style="font-size:10px;color:var(--outline);margin-top:3px;margin-left:4px">${inst.lastActive}</div>
+          <div style="font-size:10px;color:var(--outline);margin-top:3px;margin-left:4px">${inst.lastActive || 'Just now'}</div>
         </td>
         <td style="text-align:right">
           ${!isTerminated ? `
@@ -691,12 +700,14 @@ window.applyInstancePreset = function(preset) {
   }
 };
 
-window.handleAddInstanceSubmit = async function(event) {
+window.handleAddInstanceSubmit = function(event) {
   if (event) event.preventDefault();
 
-  const name = document.getElementById('inst-input-name')?.value.trim();
+  const nameInput = document.getElementById('inst-input-name');
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!name) {
     showToast('Instance name is required.', 'error');
+    if (nameInput) nameInput.focus();
     return;
   }
 
@@ -710,12 +721,10 @@ window.handleAddInstanceSubmit = async function(event) {
   const tags = rawTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
   if (tags.length === 0) tags.push('custom');
 
-  const submitBtn = document.getElementById('btn-submit-instance');
-  const submitText = document.getElementById('submit-instance-text');
-  if (submitBtn) submitBtn.disabled = true;
-  if (submitText) submitText.textContent = 'Provisioning...';
-
-  const payload = {
+  // Generate unique instance ID
+  const randomHex = Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 9);
+  const newInstance = {
+    id: `i-${randomHex}`,
     name,
     type,
     region,
@@ -723,49 +732,15 @@ window.handleAddInstanceSubmit = async function(event) {
     cpuUtilization,
     memoryUtilization,
     tags,
-    status
+    status,
+    lastActive: "Just now"
   };
 
-  let newInstance = null;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/instances`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.instance) {
-        newInstance = data.instance;
-      }
-    }
-  } catch (err) {
-    console.warn("Backend offline or error provisioning instance, using local store:", err);
-  }
-
-  // Fallback to local creation if backend didn't return
-  if (!newInstance) {
-    const randomHex = Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 9);
-    newInstance = {
-      id: `i-${randomHex}`,
-      name,
-      type,
-      region,
-      monthlyCost,
-      cpuUtilization,
-      memoryUtilization,
-      tags,
-      status,
-      lastActive: "Just now"
-    };
-  }
-
-  // Add to active state
+  // Add to active state immediately (optimistic UI update)
   state.instances.unshift(newInstance);
 
   // Add audit log
-  const operatorName = state.currentUser ? `${state.currentUser.name} (${state.currentUser.role || 'IAM'})` : 'Platform Engineer';
+  const operatorName = state.currentUser ? (state.currentUser.name || state.currentUser.email || 'Platform Engineer') : 'Platform Engineer';
   state.auditLogs.unshift({
     id: `audit-${Date.now()}`,
     timestamp: new Date().toISOString(),
@@ -775,18 +750,26 @@ window.handleAddInstanceSubmit = async function(event) {
     details: `Added new cloud instance "${newInstance.name}" (${newInstance.id}, ${newInstance.type}) in ${newInstance.region} by ${operatorName}`
   });
 
-  // Re-render UI
+  // Re-render dashboard UI and recalculate metrics
   computeMetrics();
   renderAll();
 
-  // Reset form & close modal
+  // Reset form & close modal immediately
   document.getElementById('add-instance-form')?.reset();
   closeAddInstanceModal();
 
-  if (submitBtn) submitBtn.disabled = false;
-  if (submitText) submitText.textContent = 'Add to Telemetry';
+  showToast(`Workload "${newInstance.name}" successfully added to telemetry inventory!`, 'success');
 
-  showToast(`Workload "${newInstance.name}" successfully added to inventory!`, 'success');
+  // Background sync if backend is reachable
+  if (typeof fetch === 'function') {
+    fetch(`${API_BASE}/api/instances`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newInstance)
+    }).catch(err => {
+      console.warn("Background instance sync note:", err.message);
+    });
+  }
 };
 
 
@@ -921,69 +904,74 @@ function renderAll() {
 }
 
 /**
- * Smooth Video Looper with Cinematic Fade Transition
- * Fades out gently 0.85s before ending, resets to start, and smoothly fades in
+ * Background Video Controller â€” Reliable Autoplay & Continuous Infinite Loop
+ * Ensures muted autoplay on initial load, handles tab focus/visibility,
+ * and maintains continuous infinite looping without freezing on the last frame.
  */
 function initSmoothVideoLoop() {
   const video = document.getElementById('hero-video');
   if (!video) return;
 
-  // Guarantee muted state for browser autoplay policy
+  // Strict autoplay policy compliance: muted + playsinline + loop
   video.muted = true;
   video.defaultMuted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('loop', '');
 
-  const tryPlay = () => {
+  const startPlayback = () => {
     if (video.paused) {
       const p = video.play();
-      if (p !== undefined) {
+      if (p !== undefined && typeof p.catch === 'function') {
         p.catch(() => {});
       }
     }
   };
 
-  tryPlay();
-  video.addEventListener('loadeddata', tryPlay, { once: true });
-  video.addEventListener('canplay', tryPlay, { once: true });
-  document.addEventListener('touchstart', tryPlay, { once: true, passive: true });
-  document.addEventListener('scroll', tryPlay, { once: true, passive: true });
+  // Immediate start on invocation
+  startPlayback();
 
-  let isFading = false;
-  const FADE_LEAD_TIME = 0.85; // seconds before end to begin fade-out
+  // Media event triggers for fast first-frame load
+  video.addEventListener('loadedmetadata', startPlayback, { once: true });
+  video.addEventListener('loadeddata', startPlayback, { once: true });
+  video.addEventListener('canplay', startPlayback, { once: true });
+  video.addEventListener('canplaythrough', startPlayback, { once: true });
 
+  // Fallback 1: Seamless loop when video reaches end
+  video.addEventListener('ended', () => {
+    video.currentTime = 0;
+    startPlayback();
+  });
+
+  // Fallback 2: Infinite loop threshold check (safeguard against stalled last frame)
   video.addEventListener('timeupdate', () => {
-    if (video.duration && !isNaN(video.duration)) {
-      const timeLeft = video.duration - video.currentTime;
-      if (timeLeft <= FADE_LEAD_TIME && !isFading) {
-        isFading = true;
-        video.classList.add('video-fading');
+    if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+      if (video.currentTime >= video.duration - 0.15) {
+        video.currentTime = 0;
+        startPlayback();
       }
     }
   });
 
-  const restartVideoLoop = () => {
-    video.currentTime = 0;
-    const playPromise = video.play();
-
-    const finishFadeIn = () => {
-      setTimeout(() => {
-        video.classList.remove('video-fading');
-        isFading = false;
-      }, 100);
-    };
-
-    if (playPromise !== undefined) {
-      playPromise
-        .then(finishFadeIn)
-        .catch(err => {
-          console.warn("Autoplay notice:", err);
-          finishFadeIn();
-        });
-    } else {
-      finishFadeIn();
+  // Fallback 3: Resume if tab becomes visible or focused
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      startPlayback();
     }
-  };
+  });
+  window.addEventListener('focus', () => {
+    startPlayback();
+  });
 
-  video.addEventListener('ended', restartVideoLoop);
+  // Fallback 4: Auto-resume if accidentally paused while in hero viewport
+  video.addEventListener('pause', () => {
+    if (!document.hidden && window.scrollY < (window.innerHeight || 800)) {
+      setTimeout(startPlayback, 50);
+    }
+  });
 }
 
 // Global initialization on DOM ready

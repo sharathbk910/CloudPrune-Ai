@@ -329,18 +329,14 @@ input {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: opacity 0.85s cubic-bezier(0.4, 0, 0.2, 1);
-  opacity: 1;
-  will-change: opacity;
+  opacity: 1 !important;
+  will-change: transform;
   /* Subtle cinematic blur with rich vintage warmth */
   filter: blur(3.5px) brightness(0.92) contrast(1.14) saturate(0.95) sepia(0.12);
   transform: scale(1.06);
   pointer-events: none;
 }
 
-.hero-video-wrapper video.video-fading {
-  opacity: 0;
-}
 
 .hero-video-overlay {
   position: absolute;
@@ -1237,8 +1233,10 @@ input {
 }
 
 .footer-top {
-  display: grid;
-  grid-template-columns: 1.4fr 2fr;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-3xl);
   margin-bottom: var(--space-2xl);
 }
@@ -1303,9 +1301,8 @@ input {
 }
 
 .footer-links-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-lg);
+  display: flex;
+  gap: var(--space-2xl);
 }
 
 .footer-col {

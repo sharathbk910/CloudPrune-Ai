@@ -83,14 +83,26 @@
       </video>
       <div class="hero-video-overlay"></div>
     </div>
+    <script>
+      (function(){
+        var v = document.getElementById('hero-video');
+        if (v) {
+          v.muted = true;
+          v.defaultMuted = true;
+          v.loop = true;
+          var p = v.play();
+          if (p && typeof p.catch === 'function') { p.catch(function(){}); }
+        }
+      })();
+    </script>
 
     <!-- Hero Content -->
     <div class="hero-content">
       <h1 class="hero-headline">
-        Prune idle cloud waste with
-        <span class="gradient-text">autonomous AI precision</span>
+        Prune idle cloud waste<br>
+        with <span class="gradient-text">Autonomous AI</span><br>
+        <span class="gradient-text">Precision</span>
       </h1>
-
 
       <!-- CTA Buttons -->
       <div class="hero-ctas">
@@ -102,24 +114,6 @@
           <span class="material-symbols-outlined btn-icon-left">history</span>
           <span>View Audit Trail</span>
         </button>
-      </div>
-
-      <!-- Trust Signals -->
-      <div class="trust-signals">
-        <span class="trust-item">
-          <span class="material-symbols-outlined trust-icon">check_circle</span>
-          Human Approval Required
-        </span>
-        <span class="trust-divider">•</span>
-        <span class="trust-item">
-          <span class="material-symbols-outlined trust-icon">check_circle</span>
-          Zero Downtime Risk
-        </span>
-        <span class="trust-divider">•</span>
-        <span class="trust-item">
-          <span class="material-symbols-outlined trust-icon">check_circle</span>
-          SOC2 Type II Certified
-        </span>
       </div>
     </div>
 
@@ -261,17 +255,7 @@
     </div>
   </section>
 
-  <!-- ====== SOCIAL PROOF ====== -->
-  <section id="social-proof">
-    <p class="section-eyebrow">Trusted by Platform Engineering teams at high-growth enterprises</p>
-    <div class="company-grid">
-      <div class="company-badge"><span class="material-symbols-outlined badge-icon secondary">cloud</span> AWS EC2</div>
-      <div class="company-badge"><span class="material-symbols-outlined badge-icon primary">deployed_code</span> Kubernetes</div>
-      <div class="company-badge"><span class="material-symbols-outlined badge-icon tertiary">savings</span> FinOps Foundation</div>
-      <div class="company-badge"><span class="material-symbols-outlined badge-icon secondary">memory</span> Google Cloud</div>
-      <div class="company-badge wide"><span class="material-symbols-outlined badge-icon primary">security</span> SOC2 Type II Certified</div>
-    </div>
-  </section>
+
 
   <!-- ====== FEATURES SECTION ====== -->
   <section id="features">
@@ -489,20 +473,6 @@
             <a href="#dashboard">Automated Audits</a>
             <a href="#dashboard">Human-in-the-Loop</a>
             <a href="#dashboard">Safety Snapshots</a>
-          </div>
-          <div class="footer-col">
-            <div class="footer-col-title">Platform</div>
-            <a href="#">AWS Support</a>
-            <a href="#">Google Cloud Engine</a>
-            <a href="#">Azure Compute</a>
-            <a href="#">Kubernetes Pods</a>
-          </div>
-          <div class="footer-col">
-            <div class="footer-col-title">Trust & Security</div>
-            <a href="#">SOC2 Type II Report</a>
-            <a href="#">Least-Privilege IAM</a>
-            <a href="#">Zero Retention Policy</a>
-            <a href="#">Status Page</a>
           </div>
         </div>
       </div>
