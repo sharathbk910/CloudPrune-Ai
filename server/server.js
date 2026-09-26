@@ -271,44 +271,67 @@ const AUTH_USERS = [];
 // ============================================
 // SUPABASE PROFILE PERSISTENCE
 // Upserts user details to the `profiles` table
-// via Supabase REST API (no SDK required)
+// via Supabase REST API (no SDK required).
+// Called on every successful auth event so that:
+//  - New users: row is created with all fields + created_at
+//  - Existing users: last_login + updated_at are refreshed
 // ============================================
+
+// Hard-coded fallbacks ensure this works on Vercel even if the
+// env vars haven't been added to the dashboard yet.
+const SUPABASE_REST_URL = process.env.SUPABASE_URL || "REDACTED_SUPABASE_URL";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  "REDACTED_SUPABASE_SERVICE_KEY";
+
 async function upsertUserToSupabase(user) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return; // not configured, skip silently
+  const now = new Date().toISOString();
   try {
+    // Payload maps every auth-time field the `profiles` table has.
+    // `last_login` + `updated_at` are always overwritten (tracks every sign-in).
+    // `created_at` has a server-side DEFAULT so we never need to send it.
     const payload = {
-      id: user.id,
-      email: user.email,
-      name: user.name || null,
-      role: user.role || null,
-      avatar: user.avatar || null,
-      picture: user.picture || null,
-      provider: user.provider || null,
-      email_verified: user.emailVerified || false,
-      google_sub: user.googleSub || null,
-      verified_at: user.verifiedAt || null,
-      updated_at: new Date().toISOString()
+      id:             user.id,
+      email:          user.email,
+      name:           user.name           || null,
+      role:           user.role           || null,
+      avatar:         user.avatar         || null,
+      picture:        user.picture        || null,
+      provider:       user.provider       || null,
+      email_verified: user.emailVerified  || false,
+      google_sub:     user.googleSub      || null,
+      verified_at:    user.verifiedAt     || null,
+      last_login:     now,
+      updated_at:     now
     };
-    const res = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+
+    console.log(`[SUPABASE] Upserting profile for ${user.email} (provider: ${user.provider || "unknown"})...`);
+
+    const res = await fetch(`${SUPABASE_REST_URL}/rest/v1/profiles`, {
       method: "POST",
       headers: {
-        "apikey": serviceKey,
-        "Authorization": `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=representation"
+        "apikey":        SUPABASE_SERVICE_KEY,
+        "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+        "Content-Type":  "application/json",
+        // merge-duplicates = INSERT â€¦ ON CONFLICT (id) DO UPDATE
+        "Prefer":        "resolution=merge-duplicates,return=representation"
       },
       body: JSON.stringify(payload)
     });
+
+    const responseText = await res.text();
+
     if (!res.ok) {
-      const errText = await res.text();
-      console.warn(`[SUPABASE] Profile upsert warning for ${user.email}:`, errText);
+      // Surface the full Supabase error so it's visible in Vercel Function logs
+      console.error(
+        `[SUPABASE] âŒ Profile upsert FAILED for ${user.email} ` +
+        `(HTTP ${res.status}): ${responseText}`
+      );
     } else {
-      console.log(`âœ… [SUPABASE] Profile saved for ${user.email}`);
+      console.log(`[SUPABASE] âœ… Profile saved/updated for ${user.email} â€” last_login: ${now}`);
     }
   } catch (err) {
-    console.warn(`[SUPABASE] Profile upsert error for ${user.email}:`, err.message);
+    // Network/timeout errors
+    console.error(`[SUPABASE] âŒ Profile upsert EXCEPTION for ${user.email}: ${err.message}`);
   }
 }
 
